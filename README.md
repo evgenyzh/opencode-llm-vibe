@@ -18,7 +18,8 @@ parts are required:
 }
 ```
 
-For local development, point at the package directory:
+For local development, point at the package directory in the project config or
+in the global `~/.config/opencode/opencode.json`:
 
 ```jsonc
 {
@@ -71,7 +72,9 @@ different vibes do not collapse into the same blue/orange gradient.
 
 The prompt makes the tool part of every turn: the first tool call should be
 `vibe`, with updates between phases and immediately before the final answer
-(2–4 calls is the normal range). The last call wins; there is no history. To
+(2–4 calls is the normal range; the first and last are mandatory). The tool is
+registered as a direct tool (`codemode: false`), so the model can call it
+without routing through `execute`. The last call wins; there is no history. To
 remove the mood, the model calls:
 
 ```json
@@ -92,14 +95,18 @@ session history.
   and keeps a landscape aspect. The blob is sampled with a virtual margin so it
   does not touch the edges.
 - The image is a moving gradient/blob field with low-frequency noise.
+- Blob radius follows context-window fill: 0.8× when nearly empty, 1.25× when
+  full. The level is eased over ~1 s, so it grows and shrinks smoothly,
+  including after compaction.
 - Empty pixels fade into the TUI theme background; there is no vignette or
   visible rectangle around the image.
 - Words are rendered on the theme background at the bottom; image pixels remain
   on both sides.
 - With no mood, nothing is drawn: the slot is just the theme background.
-- Animation tempo follows live activity: idle 0.45×, waiting 0.8×, thinking
-  1.25×, writing 1.55×, tool 1.9×, with a ~300 ms ease between speeds. The model
+- Animation tempo follows live activity: idle 0.5×, waiting 0.9×, thinking
+  1.7×, writing 2.1×, tool 2.6×, with a ~300 ms ease between speeds. The model
   does not need to call the tool for this; the TUI listens to session events.
+  The renderer runs at 15 FPS.
 - Mood changes morph over ~1 s. If a new `vibe` call arrives mid-morph, the next
   transition starts from the currently rendered field and palette instead of
   snapping back to the previous target.
@@ -116,15 +123,17 @@ using a prompt that does not call the tool:
 |---|---:|---:|
 | Prompt tokens (input + cache read) | 6,171 | 6,306 |
 
-**Fixed overhead: +135 input tokens per model request.** That is the system
-instruction plus the tool schema, the preset enum, and the description. Exact
-numbers vary by tokenizer and model.
+**Fixed overhead was +135 input tokens per model request** in the last measured
+build. That is the system instruction plus the tool schema, the preset enum, and
+the description. The current mandatory-side-channel wording is slightly longer;
+re-measure if the exact budget matters. Exact numbers vary by tokenizer and
+model.
 
-A `vibe` call adds roughly 30–50 tokens of JSON plus `ok`, and causes one extra
-model request that re-reads the current context (~300–400 tokens plus context).
-The tool call also stays in the session history and adds roughly 30–60 tokens
-per later request. The prompt asks for 2–4 calls on a normal turn: first, between
-phases, and before the final answer; there is no hard limit.
+A direct `vibe` call adds roughly 30–50 tokens of JSON plus `ok`, and causes one
+extra model request that re-reads the current context (~300–400 tokens plus
+context). The tool call also stays in the session history and adds roughly
+30–60 tokens per later request. The prompt asks for 2–4 calls on a normal turn:
+first, between phases, and before the final answer; there is no hard limit.
 
 See [`SPEC.md`](./SPEC.md) §9 for the full budget and caveats.
 
@@ -149,13 +158,14 @@ animated rectangle
 ```
 
 - Server part: `src/index.ts`, `src/tool.ts`, `src/prompt.ts`, `src/rpc.ts`.
-- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/dimensions.ts`, `src/activity.ts`, `src/motion.ts`, `src/morph.ts`, `src/field.ts`, `src/render.ts`.
+- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/dimensions.ts`, `src/activity.ts`, `src/context-usage.ts`, `src/motion.ts`, `src/morph.ts`, `src/field.ts`, `src/render.ts`.
 - Shared protocol: `src/mood.ts`, `src/rpc.ts`.
 
 There is no server-side storage, database, file cache, `ctx.storage`, history
-scan, or auto-clear. The TUI keeps only an in-memory map. An RPC event missed
-while the TUI is disconnected is intentionally not recovered; the slot stays
-blank until the next `vibe` call.
+scan, or auto-clear. The TUI keeps only in-memory maps. Context fill comes from
+`session.step.ended` tokens plus the selected model's context limit and is not
+persisted. An RPC event missed while the TUI is disconnected is intentionally
+not recovered; the slot stays blank until the next `vibe` call.
 
 ## Development
 

@@ -42,10 +42,11 @@ export function visualAt(
   pixelRows: number,
   at: number,
   background?: Rgb,
+  radiusScale: number = 1,
 ): Visual {
   if (!transition) {
     return {
-      field: sampleField(mood, phase, columns, pixelRows),
+      field: sampleField(mood, phase, columns, pixelRows, radiusScale),
       palette: paletteFor(mood, background),
       mood,
     }
@@ -54,16 +55,21 @@ export function visualAt(
   const raw = clamp((at - transition.start) / MORPH_MS, 0, 1)
   if (raw >= 1) {
     return {
-      field: sampleField(transition.to, phase, columns, pixelRows),
+      field: sampleField(transition.to, phase, columns, pixelRows, radiusScale),
       palette: paletteFor(transition.to, background),
       mood: transition.to,
     }
   }
 
   const progress = ease(raw)
-  const source = transition.fromField ?? sampleField(transition.fromMood, phase, columns, pixelRows)
+  const source =
+    transition.fromField ?? sampleField(transition.fromMood, phase, columns, pixelRows, radiusScale)
   return {
-    field: blendFields(source, sampleField(transition.to, phase, columns, pixelRows), progress),
+    field: blendFields(
+      source,
+      sampleField(transition.to, phase, columns, pixelRows, radiusScale),
+      progress,
+    ),
     palette: blendPalettes(transition.fromPalette, paletteFor(transition.to, background), progress),
     mood: progress < 0.45 ? transition.fromMood : transition.to,
   }

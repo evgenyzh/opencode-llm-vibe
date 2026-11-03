@@ -16,6 +16,9 @@ export default Plugin.define({
         name: "vibe",
         description: VIBE_TOOL_DESCRIPTION,
         input: VIBE_INPUT_SCHEMA,
+        // Without this the tool is reachable only through Code Mode (`execute`),
+        // so the model cannot call it directly and prompt injection never sees it.
+        options: { codemode: false },
         execute: async (input, toolContext) =>
           handleVibe(input, toolContext.sessionID, (sessionID, mood) =>
             rpc.events.emit("updated", { sessionID, mood }),

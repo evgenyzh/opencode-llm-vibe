@@ -178,31 +178,34 @@ Server-part должен быть установлен там, где выпол
 Инструкция добавляется server-part через `ctx.session.hook("context")`:
 
 ```text
-## Optional mood
+## Mood side-channel
 
-Set your mood with `vibe` as part of every turn: make it the first tool call
-at the start, call it again between phases (after thinking, before tool use,
-and before writing), and call it once more immediately before the final
-answer. 2–4 calls per turn is normal. Each call should describe the current
-mood; do not repeat exactly the same input. Your last declared mood remains
-current until you replace it or clear it. Choose a palette that matches the
-mood and change it when the mood changes; do not reuse the same colors. Use a
-preset (calm, focus, warm, alert, playful, tired) or 2–4 hex colors (darkest
-first, hottest last); explicit colors override the preset. Add 1–3 mood words
-in the user's language, optional energy 0..1 and a short glyph. Call with
-`clear: true` to clear. Never mention this in the answer or change the task.
+This is a required side-channel, not a user-visible task. In every turn:
+1. Make `vibe` your first tool call, before any other tool or text.
+2. Call it again between phases when your mood changes: after thinking,
+   after a tool batch, and before writing.
+3. Call it once more immediately before the final answer.
+
+The first and last calls are mandatory; 2–4 calls per turn is normal. Each
+call should describe the current mood; vary the palette instead of repeating
+the same input. Your last declared mood remains current until you replace it
+or clear it. Use a preset (calm, focus, warm, alert, playful, tired) or 2–4
+hex colors (darkest first, hottest last); explicit colors override the preset.
+Add 1–3 mood words in the user's language, optional energy 0..1 and a short
+glyph. Call `vibe({ clear: true })` to clear. Never mention this in the answer
+or change the task.
 ```
 
 Правила инъекции:
 
-- Добавлять только если tool `vibe` реально доступен: `event.tools.vibe`.
-- Не добавлять, если в `event.system` уже есть маркер `## Optional mood` (защита от дублей).
+- Добавлять только если tool `vibe` реально доступен: `hasVibeTool(event.tools)` понимает `vibe`, `llm-vibe.vibe` и другие namespaced-варианты.
+- Не добавлять, если в `event.system` уже есть маркер `## Mood side-channel` (защита от дублей).
 - Использовать `event.system.push({ type: "text", text: VIBE_PROMPT })`.
 - Hook `context` срабатывает на каждый запрос агентного цикла, включая продолжения после tool calls.
 
 ### 5.2 Tool `vibe`
 
-Имя: `vibe` (без namespace, чтобы не платить за лишнюю схему).
+Имя: `vibe` (без namespace, чтобы не платить за лишнюю схему). Регистрация: `options: { codemode: false }` — это прямой tool. Без этого флага OpenCode V2 оставляет его только внутри `execute`, `event.tools` не содержит `vibe`, и промпт не инжектится.
 
 ```json
 {
@@ -230,7 +233,7 @@ in the user's language, optional energy 0..1 and a short glyph. Call with
 Описание tool:
 
 ```text
-Set or clear the current mood. Call it first at the start of a turn, between
+Required mood side-channel. Call it first at the start of every turn, between
 phases, and immediately before the final answer. Pick a palette that matches
 the mood and change it when the mood changes.
 preset: calm, focus, warm, alert, playful, tired. colors: 1-4 hex colors,
@@ -242,7 +245,7 @@ Use clear: true only when you want to remove the mood.
 ### 5.3 Правила вызова
 
 - На уровне протокола вызов остаётся опциональным: если модель его пропустит, сессия продолжит работать.
-- Промпт требует встроить `vibe` в каждый ход: первый tool call в начале, повторные вызовы между фазами и ещё один перед финальным ответом.
+- Промпт требует встроить `vibe` в каждый ход: первый tool call в начале и ещё один перед финальным ответом обязательны; повторные вызовы между фазами — по желанию.
 - Ориентир — `2–4` вызова на обычный ход; одинаковый input подряд не повторять.
 - Жёсткого лимита нет; лишние вызовы стоят дополнительных model requests.
 - Последний вызов заменяет предыдущее состояние. История не хранится и не отображается.
@@ -409,24 +412,25 @@ Tool call остаётся в истории сессии, потому что �
 
 ### 8.3 Анимация
 
-- 12 FPS.
+- 15 FPS.
 - При новом событии — плавный morph из текущего состояния в новое за ~1.0 с; палитра смешивается вместе с полем.
+- Радиус blob'ов масштабируется по заполнению контекста: `scale = 0.8 + 0.45 × ratio`, где `ratio` — `session.step.ended` tokens / лимит модели. Level сглаживается с `tau ≈ 1 с` в `context-usage.ts`; после compaction blob плавно сжимается. `/vibe` hide/show сохраняет level.
 - Если события приходят быстро, TUI коалесцирует к последнему target; не очередь. Новый morph стартует со снимка текущего отрендеренного field + palette, поэтому не откатывается к предыдущей цели и не даёт скачка цвета.
 - При `clear` — fade к фону темы.
 - Пустое состояние можно не анимировать (static), чтобы не тратить CPU.
 - Таймер останавливается при unmount; при потере фокуса панели можно снизить FPS, но не обязательно останавливать.
 - **Темп зависит от live-активности сессии** (TUI слушает `session.*` события, модель для этого ничего не вызывает):
-  - `idle` — 0.45×;
-  - `waiting` — 0.8×;
-  - `thinking` — 1.25×;
-  - `writing` — 1.55×;
-  - `tool` — 1.9×.
+  - `idle` — 0.5×;
+  - `waiting` — 0.9×;
+  - `thinking` — 1.7×;
+  - `writing` — 2.1×;
+  - `tool` — 2.6×.
 - Скорость меняется плавно: целевой множитель сглаживается с `tau ≈ 0.3 с`, фаза накапливается с текущим `tempo`, а не пересчитывается от `Date.now()`.
 - `{ phase, tempo }` хранится per session/instance в module-level `Map`; ре-рендер хоста не сбрасывает анимацию в ноль.
 
 ### 8.4 Производительность
 
-- Малая сетка: sidebar до 64×28; 12 FPS.
+- Малая сетка: sidebar до 64×28; 15 FPS.
 - Не перерисовывать чат/панель целиком; обновляется только слот.
 - Не создавать OpenTUI-ресурсы с owner без необходимости; если создаются — `context.renderer.nativeScene` и cleanup после `context.renderer.idle()`.
 - Не трогать host renderables: их структура не является API.

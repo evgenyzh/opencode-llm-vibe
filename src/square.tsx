@@ -4,17 +4,20 @@ import { usePlugin } from "@opencode/plugin/tui"
 import type { TextRenderable } from "@opentui/core"
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { activitySpeed, type Activity } from "./activity.js"
+import { advanceContextLevel, radiusScale } from "./context-usage.js"
 import { sidebarDimensions } from "./dimensions.js"
 import type { Mood, Rgb } from "./mood.js"
 import { MORPH_MS, visualAt, type Transition } from "./morph.js"
 import { advanceMotion, type MotionState } from "./motion.js"
 import { captionFor, renderField, type CaptionColors, type RenderedSquare } from "./render.js"
 
-const FPS = 12
+const FPS = 15
 const FRAME_MS = 1000 / FPS
 
 /** Motion survives host re-renders; each sidebar instance animates independently. */
 const motions = new Map<string, MotionState>()
+/** Smoothed context fill per session; survives the /vibe hide/show remount. */
+const contextLevels = new Map<string, number>()
 
 export interface MoodSquareProps {
   readonly sessionID: string
@@ -23,6 +26,8 @@ export interface MoodSquareProps {
   readonly columns: number
   readonly pixelRows: number
   readonly activity: Activity
+  /** 0..1 filled part of the model's context window. */
+  readonly contextRatio: number
 }
 
 function now(): number {
@@ -65,6 +70,13 @@ export function MoodSquare(props: MoodSquareProps) {
     tempo: activitySpeed(props.activity),
   }
   motions.set(motionKey, motion)
+  const targetContext = (): number => {
+    const value = Number(props.contextRatio)
+    if (!Number.isFinite(value)) return 0.5
+    return Math.min(1, Math.max(0, value))
+  }
+  let contextLevel = contextLevels.get(props.sessionID) ?? targetContext()
+  contextLevels.set(props.sessionID, contextLevel)
   let lastFrame = now()
 
   const start = (): void => {
@@ -87,6 +99,8 @@ export function MoodSquare(props: MoodSquareProps) {
     lastFrame = currentTime
     motion = advanceMotion(motion, activitySpeed(props.activity), elapsed)
     motions.set(motionKey, motion)
+    contextLevel = advanceContextLevel(contextLevel, targetContext(), elapsed)
+    contextLevels.set(props.sessionID, contextLevel)
 
     const current = transition
     if (current && currentTime - current.start >= MORPH_MS) {
@@ -117,6 +131,7 @@ export function MoodSquare(props: MoodSquareProps) {
       pixelRows,
       at,
       background(),
+      radiusScale(contextLevel),
     )
 
     transition = {
@@ -149,6 +164,7 @@ export function MoodSquare(props: MoodSquareProps) {
       pixelRows,
       now(),
       background(),
+      radiusScale(contextLevel),
     )
     return renderField(
       visual.field,

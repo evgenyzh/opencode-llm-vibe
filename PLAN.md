@@ -220,11 +220,12 @@ npm pack --dry-run
     - toggle: `setVisible(value => !value)`;
     - `enabled` только в сессии.
 - [x] `src/square.tsx`:
-  - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`;
+  - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`, `contextRatio`;
   - reactive mood из store;
   - ширина измеряется у собственного `<box>` через `ref` + `onSizeChange`/`getLayout().width`;
   - если mood null → static dark empty (без таймера);
-  - если mood есть → timer 12 FPS; фаза накапливается со скоростью активности и сглаживается (`motion.ts`);
+  - если mood есть → timer 15 FPS; фаза накапливается со скоростью активности и сглаживается (`motion.ts`);
+  - `contextRatio` сглаживается в `context-usage.ts` и масштабирует радиус blob'ов (`0.8..1.25×`);
   - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
   - фон/текст брать из `context.theme`; low values field смешивать с фоном;
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
@@ -400,12 +401,12 @@ llm-vibe/
 
 | Риск | Mitigation |
 |---|---|
-| Модель игнорирует optional tool | Жёсткий промпт: первый вызов, промежуточные фазы, финал; описание tool; пустой default не выглядит ошибкой |
+| Модель игнорирует optional tool | Прямой tool (`codemode: false`), жёсткий промпт: первый вызов, промежуточные фазы, финал; описание tool; пустой default не выглядит ошибкой |
 | Слишком большой token overhead | Компактная схема, один tool, без stages, замер, project-local install |
 | Tool call history растёт | 2–4 ориентир, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
-| Медленный рендер | W 16–64, H 14–28, 12 FPS, static empty, cleanup |
+| Медленный рендер | W 16–64, H 14–28, 15 FPS, static empty, cleanup |
 | Невалидные цвета/glyph | Sanitize/fallback, tool не падает |
 | Focus stealing | Sidebar не открывает панель; `/vibe` только переключает видимость |
 | Remote server без server-part | Документировать установку обеих частей |

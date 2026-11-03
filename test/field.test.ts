@@ -69,6 +69,14 @@ describe("sampleField", () => {
     const b = sampleField({ ...calm, words: "angry" }, 0, 20)
     expect(Array.from(a)).not.toEqual(Array.from(b))
   })
+
+  it("grows the blob with the radius scale", () => {
+    const small = sampleField(calm, 1, 32, 24, 0.8)
+    const large = sampleField(calm, 1, 32, 24, 1.25)
+    const brightness = (field: Float32Array): number =>
+      field.reduce((sum, value) => sum + value, 0)
+    expect(brightness(large)).toBeGreaterThan(brightness(small))
+  })
 })
 
 describe("blendFields", () => {

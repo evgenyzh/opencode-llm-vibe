@@ -21,11 +21,11 @@ export type ActivityEvent =
 
 /** Multiplier for the field phase. Idle still drifts, but slowly. */
 export const ACTIVITY_SPEED: Record<Activity, number> = {
-  idle: 0.45,
-  waiting: 0.8,
-  thinking: 1.25,
-  writing: 1.55,
-  tool: 1.9,
+  idle: 0.5,
+  waiting: 0.9,
+  thinking: 1.7,
+  writing: 2.1,
+  tool: 2.6,
 }
 
 export function activitySpeed(activity: Activity): number {
