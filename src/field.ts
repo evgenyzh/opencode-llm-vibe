@@ -27,7 +27,7 @@ function smoothstep(edge0: number, edge1: number, value: number): number {
   return t * t * (3 - 2 * t)
 }
 
-function hashString(value: string): number {
+export function hashString(value: string): number {
   let hash = 2166136261
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index)
@@ -64,6 +64,8 @@ export function sampleField(
   width: number,
   height: number = width,
   radiusScale: number = 1,
+  seedOverride?: number,
+  energyOverride?: number,
 ): Float32Array {
   const w = normalizeSize(width)
   const h = normalizeSize(height)
@@ -82,19 +84,26 @@ export function sampleField(
     return field
   }
 
-  const energy = clamp(Number.isFinite(mood.energy) ? mood.energy : 0.5, 0, 1)
-  const seed = hashString(`${mood.colors.join(",")}|${mood.words ?? ""}|${mood.glyph ?? ""}`)
-  const blobCount = 3 + Math.round(energy * 2)
+  const requestedEnergy = energyOverride ?? mood.energy
+  const energy = clamp(Number.isFinite(requestedEnergy) ? requestedEnergy : 0.5, 0, 1)
+  const seed =
+    seedOverride !== undefined && Number.isFinite(seedOverride)
+      ? seedOverride >>> 0
+      : hashString(`${mood.colors.join(",")}|${mood.words ?? ""}|${mood.glyph ?? ""}`)
+  const blobCount = 3 + energy * 2
+  const wholeBlobs = Math.floor(blobCount)
+  const partialBlob = blobCount - wholeBlobs
   const speed = 0.18 + energy * 0.7
   const noiseAmplitude = 0.1 + energy * 0.22
   const scale = Number.isFinite(radiusScale) ? clamp(radiusScale, 0.5, 1.5) : 1
 
-  const blobs = Array.from({ length: blobCount }, (_, index) => {
+  const blobs = Array.from({ length: Math.ceil(blobCount) }, (_, index) => {
     const phase = (seed / 4294967295) * Math.PI * 2 + index * 2.399
     const offset = 0.21 + energy * 0.09
+    const fade = index < wholeBlobs ? 1 : partialBlob
     return {
       phase,
-      weight: 0.72 + 0.28 * Math.abs(Math.sin(phase * 1.7 + 0.9)),
+      weight: (0.72 + 0.28 * Math.abs(Math.sin(phase * 1.7 + 0.9))) * fade,
       x: 0.5 + Math.sin(t * speed * (0.72 + index * 0.045) + phase) * offset,
       y: 0.5 + Math.cos(t * speed * (0.57 + index * 0.035) + phase * 1.37) * (offset * 0.86),
       radius: (0.26 + 0.07 * Math.sin(phase * 1.9) + energy * 0.11) * scale,

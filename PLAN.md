@@ -230,7 +230,7 @@ npm pack --dry-run
   - фон/текст брать из `context.theme`; low values field смешивать с фоном;
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
-  - morph при смене mood ~1 с; при interrupt стартует со снимка текущих field + palette;
+  - morph при смене mood ~1.5 с; energy интерполируется, seed формы фиксирован на сессию; при interrupt стартует с текущего energy + palette;
   - cleanup таймера и `onSizeChange`.
 - [x] Проверить:
   - sidebar не крадёт фокус;

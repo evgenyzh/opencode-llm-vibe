@@ -6,8 +6,9 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { activitySpeed, type Activity } from "./activity.js"
 import { advanceContextLevel, radiusScale } from "./context-usage.js"
 import { sidebarDimensions } from "./dimensions.js"
+import { hashString } from "./field.js"
 import type { Mood, Rgb } from "./mood.js"
-import { MORPH_MS, visualAt, type Transition } from "./morph.js"
+import { MORPH_MS, transitionEnergy, visualAt, type Transition } from "./morph.js"
 import { advanceMotion, type MotionState } from "./motion.js"
 import { captionFor, renderField, type CaptionColors, type RenderedSquare } from "./render.js"
 
@@ -18,6 +19,25 @@ const FRAME_MS = 1000 / FPS
 const motions = new Map<string, MotionState>()
 /** Smoothed context fill per session; survives the /vibe hide/show remount. */
 const contextLevels = new Map<string, number>()
+
+interface SessionVisual {
+  last: Mood | null
+  transition?: Transition
+  /** Blob identity is pinned per session, so moods migrate instead of reseeding. */
+  shapeSeed: number
+}
+
+/** Morph state survives the /vibe hide/show remount. */
+const visuals = new Map<string, SessionVisual>()
+
+function visualFor(key: string, mood: Mood | null): SessionVisual {
+  let visual = visuals.get(key)
+  if (!visual) {
+    visual = { last: mood, shapeSeed: hashString(`${key}:shape`) }
+    visuals.set(key, visual)
+  }
+  return visual
+}
 
 export interface MoodSquareProps {
   readonly sessionID: string
@@ -61,15 +81,13 @@ export function MoodSquare(props: MoodSquareProps) {
     if (width > 0) setMeasuredWidth(width)
   }
   let timer: ReturnType<typeof setInterval> | undefined
-  let transition: Transition | undefined
-  let initialized = false
-  let last: Mood | null = null
-  const motionKey = `${props.sessionID}:sidebar`
-  let motion = motions.get(motionKey) ?? {
+  const instanceKey = `${props.sessionID}:sidebar`
+  const session = visualFor(instanceKey, props.mood)
+  let motion = motions.get(instanceKey) ?? {
     phase: 0,
     tempo: activitySpeed(props.activity),
   }
-  motions.set(motionKey, motion)
+  motions.set(instanceKey, motion)
   const targetContext = (): number => {
     const value = Number(props.contextRatio)
     if (!Number.isFinite(value)) return 0.5
@@ -93,57 +111,67 @@ export function MoodSquare(props: MoodSquareProps) {
     }
   }
 
+  if (props.mood !== null || session.transition !== undefined) start()
+
   function frame(): void {
     const currentTime = now()
     const elapsed = Math.min(0.25, (currentTime - lastFrame) / 1000)
     lastFrame = currentTime
     motion = advanceMotion(motion, activitySpeed(props.activity), elapsed)
-    motions.set(motionKey, motion)
+    motions.set(instanceKey, motion)
     contextLevel = advanceContextLevel(contextLevel, targetContext(), elapsed)
     contextLevels.set(props.sessionID, contextLevel)
 
-    const current = transition
+    const current = session.transition
     if (current && currentTime - current.start >= MORPH_MS) {
-      transition = undefined
-      if (last === null) stop()
+      session.transition = undefined
+      if (session.last === null) stop()
     }
     setTick((value) => value + 1)
   }
 
   createEffect(() => {
     const next = props.mood
-    if (!initialized) {
-      initialized = true
-      last = next
-      if (next !== null) start()
-      return
-    }
-    if (next === last) return
+    if (next === session.last) return
 
     const at = now()
     const { columns, pixelRows } = dimensions()
-    const active = transition !== undefined && at - transition.start < MORPH_MS
+    const activeTransition =
+      session.transition !== undefined && at - session.transition.start < MORPH_MS
+        ? session.transition
+        : undefined
     const snapshot = visualAt(
-      last,
-      active ? transition : undefined,
+      session.last,
+      activeTransition,
       motion.phase,
       columns,
       pixelRows,
       at,
       background(),
       radiusScale(contextLevel),
+      session.shapeSeed,
     )
 
-    transition = {
-      fromMood: last,
-      ...(active ? { fromField: snapshot.field } : {}),
+    const fromEnergy = activeTransition
+      ? transitionEnergy(activeTransition, at)
+      : (session.last?.energy ?? 0.5)
+    const nullEdge =
+      session.last === null ||
+      next === null ||
+      (activeTransition !== undefined &&
+        (activeTransition.fromMood === null || activeTransition.to === null))
+
+    session.transition = {
+      fromMood: session.last,
+      fromEnergy,
+      ...(nullEdge ? { fromField: snapshot.field } : {}),
       fromPalette: snapshot.palette,
       to: next,
       start: at,
     }
-    last = next
+    session.last = next
     setTick((value) => value + 1)
-    if (next !== null) start()
+    start()
   })
 
   onCleanup(stop)
@@ -156,15 +184,17 @@ export function MoodSquare(props: MoodSquareProps) {
   const output = createMemo<RenderedSquare>(() => {
     tick()
     const { columns, pixelRows } = dimensions()
+    const target = session.transition ? session.transition.to : session.last
     const visual = visualAt(
-      props.mood,
-      transition,
+      target,
+      session.transition,
       motion.phase,
       columns,
       pixelRows,
       now(),
       background(),
       radiusScale(contextLevel),
+      session.shapeSeed,
     )
     return renderField(
       visual.field,

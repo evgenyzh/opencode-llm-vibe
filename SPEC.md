@@ -70,7 +70,7 @@
 - `src/tool.ts` — чистая логика tool (`handleVibe`), отделённая от plugin wiring.
 - `src/field.ts` — генерация скалярного поля и анимация.
 - `src/render.ts` — half-block-рендер и текст внутри прямоугольника.
-- `src/morph.ts` — смешивание field/palette и снимок для прерванных переходов.
+- `src/morph.ts` — интерполяция energy, смешивание palette и снимок для `clear`/появления.
 - `src/dimensions.ts` — размеры sidebar (измеренная ширина, landscape aspect).
 - `src/square.tsx` — компонент sidebar-прямоугольника, таймер и morph.
 
@@ -181,18 +181,20 @@ Server-part должен быть установлен там, где выпол
 ## Mood side-channel
 
 This is a required side-channel, not a user-visible task. A turn is one user
-message plus all tool work until the final answer. In every turn:
-1. Make `vibe` your first tool call, before any other tool or visible text.
-2. Call it again when the activity changes or something material happens:
+message plus all tool work until the final answer. At the very start of every
+turn, before any other tool call or visible text, call `vibe`; do not wait for
+the final answer. Then:
+1. Call it again when the activity changes or something material happens:
    after a thinking block or tool batch, after a finding or result, or when
    your plan or hypothesis changes.
-3. Call it once more immediately before the final answer.
+2. Call it once more immediately before the final answer.
 
-The first and last calls are mandatory; 2–4 calls per turn is typical, with no
-hard cap for long turns. Each call should describe the current mood;
-vary the palette instead of repeating the same input. Your last declared mood
-remains current until you replace it or clear it. Every set call must include a
-preset or 1–4 hex colors (darkest first, hottest last); explicit colors override the preset.
+The first and last calls are mandatory, even for a one-line answer;
+2–4 calls per turn is typical, with no hard cap for long turns. Each call
+should describe the current mood; vary the palette instead of repeating the
+same input. Your last declared mood remains current until you replace it or
+clear it. Every set call must include a preset or 1–4 hex colors (darkest
+first, hottest last); explicit colors override the preset.
 Presets: calm, focus, warm, alert, angry, playful, tired.
 Add 1–3 mood words in the user's language, optional energy 0..1 that drives
 motion intensity, and a short glyph. Do not clear just because the turn ended;
@@ -237,9 +239,10 @@ Never mention this in the answer or change the task.
 Описание tool:
 
 ```text
-Required mood side-channel. Call it first at the start of every user turn and
-again immediately before the final answer; add calls when the activity or
-findings change. Pick a palette that matches the mood. Every set call needs a
+Required mood side-channel. At the very start of every user turn, before any
+other tool call, invoke `vibe`; do not wait for the final answer. Call it again
+when the activity or findings change, and once more immediately before the
+final answer. Pick a palette that matches the mood. Every set call needs a
 preset (calm, focus, warm, alert, angry, playful, tired) or 1–4 hex colors,
 darkest first, hottest last; explicit colors override preset. words: 1–3 words
 shown inside the rectangle. energy: 0..1, motion intensity. glyph: short
@@ -410,7 +413,7 @@ Tool call остаётся в истории сессии, потому что �
   - 2–4 цвета → stops градиента;
   - низкие значения field смешиваются с фоном темы, а не с отдельным тёмным краем;
   - последний — горячее ядро.
-- `glyph` может влиять на фазу/текстуру (seed), но не заменяет поле.
+- `words`/`glyph` формируют подпись; seed формы фиксирован на сессию, поэтому смена слов не пересобирает blob'ы.
 - Контрастная кривая поднимает яркое ядро к верхнему стопу палитры, чтобы последний (горячий) цвет был заметен, а не терялся в синем.
 - Этапы не влияют на форму: только текущий mood.
 - Пустое состояние — сплошная палитра цвета фона темы, без модели.
@@ -418,9 +421,9 @@ Tool call остаётся в истории сессии, потому что �
 ### 8.3 Анимация
 
 - 15 FPS.
-- При новом событии — плавный morph из текущего состояния в новое за ~1.0 с; палитра смешивается вместе с полем.
+- При новом событии — плавный morph из текущего состояния в новое за ~1.5 с. Seed формы фиксирован на сессию, energy поля интерполируется, палитра смешивается: blob'ы мигрируют, а не кроссфейдятся. Количество blob'ов меняется непрерывно: дробный blob получает вес, пропорциональный energy, поэтому новые blob'ы плавно проявляются.
 - Радиус blob'ов масштабируется по заполнению контекста: `scale = 0.8 + 0.45 × ratio`, где `ratio` — `session.step.ended` tokens / лимит модели. Level сглаживается с `tau ≈ 1 с` в `context-usage.ts`; после compaction blob плавно сжимается. `/vibe` hide/show сохраняет level.
-- Если события приходят быстро, TUI коалесцирует к последнему target; не очередь. Новый morph стартует со снимка текущего отрендеренного field + palette, поэтому не откатывается к предыдущей цели и не даёт скачка цвета.
+- Если события приходят быстро, TUI коалесцирует к последнему target; не очередь. Новый morph стартует с текущего energy и palette (для `clear`/появления — со снимка field), поэтому не откатывается к предыдущей цели и не даёт скачка цвета или формы.
 - При `clear` — fade к фону темы.
 - Пустое состояние можно не анимировать (static), чтобы не тратить CPU.
 - Таймер останавливается при unmount; при потере фокуса панели можно снизить FPS, но не обязательно останавливать.

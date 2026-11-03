@@ -72,12 +72,13 @@ The model may call the tool whenever it wants, with a preset or explicit colors:
 The prompt asks the model to change the palette when the mood changes, so
 different vibes do not collapse into the same blue/orange gradient.
 
-The prompt makes the tool part of every turn: the first tool call should be
-`vibe`, with updates when the activity or findings change and one immediately
-before the final answer (2–4 calls is typical, with no hard cap; the first and
-last are mandatory). The tool is registered as a direct tool (`codemode:
-false`), so the model can call it without routing through `execute`. The last
-call wins; there is no history. To remove the mood, the model calls:
+The prompt makes the tool part of every turn: call `vibe` at the very start,
+before any other tool, even for a one-line answer; then update it when the
+activity or findings change and once more before the final answer (2–4 calls is
+typical, with no hard cap; the first and last are mandatory). The tool is
+registered as a direct tool (`codemode: false`), so the model can call it
+without routing through `execute`. The last call wins; there is no history. To
+remove the mood, the model calls:
 
 ```json
 { "clear": true }
@@ -97,6 +98,8 @@ session history.
   and keeps a landscape aspect. The blob is sampled with a virtual margin so it
   does not touch the edges.
 - The image is a moving gradient/blob field with low-frequency noise.
+- Blob identity is pinned per session: `words` and `glyph` change the caption,
+  not the blob layout.
 - Blob radius follows context-window fill: 0.8× when nearly empty, 1.25× when
   full. The level is eased over ~1 s, so it grows and shrinks smoothly,
   including after compaction.
@@ -109,9 +112,11 @@ session history.
   1.7×, writing 2.1×, tool 2.6×, with a ~300 ms ease between speeds. The model
   does not need to call the tool for this; the TUI listens to session events.
   The renderer runs at 15 FPS.
-- Mood changes morph over ~1 s. If a new `vibe` call arrives mid-morph, the next
-  transition starts from the currently rendered field and palette instead of
-  snapping back to the previous target.
+- Mood changes morph over ~1.5 s. The field's energy is interpolated and the
+  palette is blended, so the same blobs migrate to the new state instead of
+  crossfading. If a new `vibe` call arrives mid-morph, the next transition
+  starts from the currently rendered field and palette instead of snapping back
+  to the previous target.
 
 The renderer uses half blocks (`▀`): `fg` is the top pixel and `bg` is the bottom
 pixel, with 24-bit color.

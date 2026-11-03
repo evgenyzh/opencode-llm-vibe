@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
+import { sampleField } from "../src/field.js"
 import type { Mood } from "../src/mood.js"
-import { MORPH_MS, visualAt, type Transition } from "../src/morph.js"
+import { MORPH_MS, transitionEnergy, visualAt, type Transition } from "../src/morph.js"
 import { paletteFor } from "../src/render.js"
 
 const calm: Mood = { colors: ["#08131f", "#1f6f78", "#8fd6c9"], energy: 0.3 }
@@ -56,6 +57,60 @@ describe("visualAt", () => {
     expect(middle.palette).not.toEqual(source)
     expect(middle.palette).not.toEqual(target)
     expect(middle.field).toHaveLength(COLUMNS * PIXEL_ROWS)
+  })
+
+  it("interpolates energy for a mood-to-mood transition with a pinned seed", () => {
+    const seed = 42
+    const transition = transitionTo(alert)
+    const middle = visualAt(
+      alert,
+      transition,
+      0,
+      COLUMNS,
+      PIXEL_ROWS,
+      MORPH_MS / 2,
+      undefined,
+      1,
+      seed,
+    )
+    const expected = sampleField(alert, 0, COLUMNS, PIXEL_ROWS, 1, seed, 0.6)
+    expect(middle.field).toEqual(expected)
+  })
+
+  it("starts and ends on the same field when the seed is pinned", () => {
+    const seed = 7
+    const transition = transitionTo(alert)
+    const start = visualAt(
+      alert,
+      transition,
+      0,
+      COLUMNS,
+      PIXEL_ROWS,
+      0,
+      undefined,
+      1,
+      seed,
+    )
+    const end = visualAt(
+      alert,
+      transition,
+      0,
+      COLUMNS,
+      PIXEL_ROWS,
+      MORPH_MS,
+      undefined,
+      1,
+      seed,
+    )
+    expect(start.field).toEqual(sampleField(calm, 0, COLUMNS, PIXEL_ROWS, 1, seed))
+    expect(end.field).toEqual(sampleField(alert, 0, COLUMNS, PIXEL_ROWS, 1, seed))
+  })
+
+  it("reports the interpolated energy", () => {
+    const transition = transitionTo(alert)
+    expect(transitionEnergy(transition, 0)).toBeCloseTo(calm.energy)
+    expect(transitionEnergy(transition, MORPH_MS / 2)).toBeCloseTo(0.6)
+    expect(transitionEnergy(transition, MORPH_MS)).toBeCloseTo(alert.energy)
   })
 
   it("fades a cleared mood to the theme background", () => {

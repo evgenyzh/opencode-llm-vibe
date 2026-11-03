@@ -61,7 +61,10 @@ describe("prompt text", () => {
   it("requires a call at the start, on phase changes, and before the answer", () => {
     expect(VIBE_PROMPT).toContain("required side-channel")
     expect(VIBE_PROMPT).toContain("A turn is one user")
-    expect(VIBE_PROMPT).toContain("first tool call")
+    expect(VIBE_PROMPT).toContain("At the very start")
+    expect(VIBE_PROMPT).toContain("before any other tool call")
+    expect(VIBE_PROMPT).toContain("do not wait for")
+    expect(VIBE_PROMPT).toContain("even for a one-line answer")
     expect(VIBE_PROMPT).toContain("activity changes")
     expect(VIBE_PROMPT).toContain("finding or result")
     expect(VIBE_PROMPT).toContain("plan or hypothesis")
@@ -88,7 +91,9 @@ describe("prompt text", () => {
 
   it("describes the tool fields and call timing compactly", () => {
     expect(VIBE_TOOL_DESCRIPTION).toContain("Required mood side-channel")
-    expect(VIBE_TOOL_DESCRIPTION).toContain("first at the start")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("At the very start")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("before any other tool call")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("do not wait for")
     expect(VIBE_TOOL_DESCRIPTION).toContain("findings change")
     expect(VIBE_TOOL_DESCRIPTION).toContain("before the final answer")
     expect(VIBE_TOOL_DESCRIPTION).toContain("not at the end of a turn")

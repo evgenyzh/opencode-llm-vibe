@@ -70,6 +70,18 @@ describe("sampleField", () => {
     expect(Array.from(a)).not.toEqual(Array.from(b))
   })
 
+  it("pins the shape when a seed is supplied", () => {
+    const a = sampleField({ ...calm, words: "calm" }, 0, 20, 20, 1, 42)
+    const b = sampleField({ ...calm, words: "angry" }, 0, 20, 20, 1, 42)
+    expect(Array.from(a)).toEqual(Array.from(b))
+  })
+
+  it("accepts an energy override", () => {
+    const low = sampleField(calm, 1, 20, 20, 1, 42, 0.1)
+    const high = sampleField(calm, 1, 20, 20, 1, 42, 0.9)
+    expect(Array.from(low)).not.toEqual(Array.from(high))
+  })
+
   it("grows the blob with the radius scale", () => {
     const small = sampleField(calm, 1, 32, 24, 0.8)
     const large = sampleField(calm, 1, 32, 24, 1.25)
