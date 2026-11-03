@@ -17,21 +17,6 @@ const FRAME_MS = 1000 / FPS
 /** Motion survives host re-renders; sidebar and panel animate independently. */
 const motions = new Map<string, MotionState>()
 
-export const SIDEBAR_COLUMNS = 24
-export const SIDEBAR_PIXEL_ROWS = 18
-
-export interface SquareDimensions {
-  readonly columns: number
-  readonly pixelRows: number
-}
-
-/** Fits a landscape rectangle into the available panel width. */
-export function panelDimensions(width: number): SquareDimensions {
-  const columns = Math.max(16, Math.min(32, normalizeSize(width - 4)))
-  const pixelRows = Math.max(12, normalizeSize(Math.round(columns * 0.75)))
-  return { columns, pixelRows }
-}
-
 export interface MoodSquareProps {
   readonly sessionID: string
   readonly mood: Mood | null

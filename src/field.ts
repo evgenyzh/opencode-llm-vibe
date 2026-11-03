@@ -4,6 +4,9 @@ import type { Mood } from "./mood.js"
 
 export const DEFAULT_SIZE = 20
 
+/** Virtual margin around the blob field so it does not touch the slot edges. */
+const FIELD_MARGIN = 0.08
+
 export function normalizeSize(size: number): number {
   if (!Number.isFinite(size)) return DEFAULT_SIZE
   const even = Math.floor(size / 2) * 2
@@ -98,8 +101,8 @@ export function sampleField(
 
   for (let y = 0; y < h; y += 1) {
     for (let x = 0; x < w; x += 1) {
-      const nx = (x + 0.5) / w
-      const ny = (y + 0.5) / h
+      const nx = -FIELD_MARGIN + ((x + 0.5) / w) * (1 + 2 * FIELD_MARGIN)
+      const ny = -FIELD_MARGIN + ((y + 0.5) / h) * (1 + 2 * FIELD_MARGIN)
 
       let value = 0
       let total = 0

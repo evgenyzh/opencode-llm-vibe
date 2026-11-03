@@ -4,14 +4,14 @@ import { Plugin } from "@opencode/plugin/tui"
 import { Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { nextActivity, type Activity, type ActivityEvent } from "./activity.js"
-import type { Mood } from "./mood.js"
-import { VibeRpc } from "./rpc.js"
 import {
-  MoodSquare,
+  panelDimensions,
   SIDEBAR_COLUMNS,
   SIDEBAR_PIXEL_ROWS,
-  panelDimensions,
-} from "./square.js"
+} from "./dimensions.js"
+import type { Mood } from "./mood.js"
+import { VibeRpc } from "./rpc.js"
+import { MoodSquare } from "./square.js"
 
 const PANEL_NAME = "llm-vibe.mood"
 

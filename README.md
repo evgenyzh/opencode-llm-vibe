@@ -90,8 +90,9 @@ history.
 ## What it looks like
 
 - Sidebar: fixed 24×18 pixel landscape rectangle (24 columns × 9 terminal rows).
-- Panel: responsive width from 16 to 32 columns; height follows at 0.75× the
-  width, so it stays a square/landscape rectangle instead of a tall column.
+- Panel: fills the available width (16..64 columns); height follows at 0.55×
+  the width, so it reads as a wide landscape rectangle. The blob is sampled
+  with a small virtual margin so it does not touch the edges.
 - The image is a moving gradient/blob field with low-frequency noise.
 - Empty pixels fade into the TUI theme background; there is no vignette or
   visible rectangle around the image.

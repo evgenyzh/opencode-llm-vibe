@@ -342,6 +342,7 @@ llm-vibe/
 │   ├── activity.ts   # session activity -> tempo
 │   ├── motion.ts     # smoothed phase/tempo state
 │   ├── morph.ts      # field/palette morph + snapshots
+│   ├── dimensions.ts # sidebar/panel dimensions
 │   ├── field.ts      # scalar field/animation
 │   ├── render.ts     # half-block + caption
 │   ├── tui.tsx       # TUI plugin, slots, command, subscription
@@ -353,6 +354,7 @@ llm-vibe/
 │   ├── activity.test.ts
 │   ├── motion.test.ts
 │   ├── morph.test.ts
+│   ├── dimensions.test.ts
 │   ├── field.test.ts
 │   └── render.test.ts
 └── .github/workflows/ci.yml
@@ -368,6 +370,7 @@ llm-vibe/
 | prompt injection condition/duplicates | да | — |
 | tool emits updated/null | да | — |
 | field dimensions/finite/determinism | да | — |
+| panel dimensions / landscape aspect | да | да |
 | render rows/caption/no control chars | да | — |
 | theme background / invisible empty state | да | да |
 | sidebar default/update | — | да |
@@ -406,7 +409,7 @@ llm-vibe/
 | Tool call history растёт | 2–4 ориентир, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
-| Медленный рендер | W 24–32, H 18–24, 12 FPS, static empty, cleanup |
+| Медленный рендер | W 16–64, H 14–28, 12 FPS, static empty, cleanup |
 | Невалидные цвета/glyph | Sanitize/fallback, tool не падает |
 | Focus stealing | Sidebar не открывает панель; `/vibe` только по команде |
 | Remote server без server-part | Документировать установку обеих частей |
