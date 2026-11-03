@@ -50,11 +50,11 @@ function now(): number {
 export function MoodSquare(props: MoodSquareProps) {
   const plugin = usePlugin()
   const background = (): Rgb => {
-    const [r, g, b] = plugin.theme.background.base.toInts()
+    const [r, g, b] = plugin.theme.background.raised.base.toInts()
     return { r, g, b }
   }
   const captionColors = (): CaptionColors => {
-    const [br, bgColor, bb] = plugin.theme.background.base.toInts()
+    const [br, bgColor, bb] = plugin.theme.background.raised.base.toInts()
     const [tr, tg, tb] = plugin.theme.text.base.toInts()
     return {
       background: { r: br, g: bgColor, b: bb },
