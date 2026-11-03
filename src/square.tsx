@@ -1,9 +1,10 @@
-/** Animated square shared by the sidebar slot and the /vibe panel. */
+/** Animated rectangle shared by the sidebar slot and the /vibe panel. */
 
 import { usePlugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { TextRenderable } from "@opentui/core"
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { activitySpeed, type Activity } from "./activity.js"
 import { blendFields, normalizeSize, sampleField } from "./field.js"
 import { blendPalettes, type Mood } from "./mood.js"
 import {
@@ -18,10 +19,27 @@ const FPS = 10
 const FRAME_MS = 1000 / FPS
 const MORPH_MS = 700
 
+export const SIDEBAR_COLUMNS = 24
+export const SIDEBAR_PIXEL_ROWS = 18
+
+export interface SquareDimensions {
+  readonly columns: number
+  readonly pixelRows: number
+}
+
+/** Fits a landscape rectangle into the available panel width. */
+export function panelDimensions(width: number): SquareDimensions {
+  const columns = Math.max(16, Math.min(32, normalizeSize(width - 4)))
+  const pixelRows = Math.max(12, normalizeSize(Math.round(columns * 0.75)))
+  return { columns, pixelRows }
+}
+
 export interface MoodSquareProps {
   readonly sessionID: string
   readonly mood: Mood | null
-  readonly size: number
+  readonly columns: number
+  readonly pixelRows: number
+  readonly activity: Activity
   readonly panel?: PanelInput
 }
 
@@ -45,12 +63,6 @@ function ease(value: number): number {
   return value * value * (3 - 2 * value)
 }
 
-/** Fits a panel square into the available width. */
-export function panelSize(width: number): number {
-  if (!Number.isFinite(width)) return 12
-  return Math.max(12, Math.min(32, normalizeSize(width - 4)))
-}
-
 export function MoodSquare(props: MoodSquareProps) {
   const plugin = usePlugin()
   const [tick, setTick] = createSignal(0)
@@ -58,9 +70,14 @@ export function MoodSquare(props: MoodSquareProps) {
   let transition: Transition | undefined
   let initialized = false
   let last: Mood | null = null
+  let phase = 0
+  let lastFrame = now()
 
   const start = (): void => {
-    if (timer === undefined) timer = setInterval(frame, FRAME_MS)
+    if (timer === undefined) {
+      lastFrame = now()
+      timer = setInterval(frame, FRAME_MS)
+    }
   }
 
   const stop = (): void => {
@@ -71,8 +88,13 @@ export function MoodSquare(props: MoodSquareProps) {
   }
 
   function frame(): void {
+    const currentTime = now()
+    const elapsed = Math.min(0.25, (currentTime - lastFrame) / 1000)
+    lastFrame = currentTime
+    phase += elapsed * activitySpeed(props.activity)
+
     const current = transition
-    if (current && now() - current.start >= MORPH_MS) {
+    if (current && currentTime - current.start >= MORPH_MS) {
       transition = undefined
       if (last === null) stop()
     }
@@ -114,24 +136,24 @@ export function MoodSquare(props: MoodSquareProps) {
 
   const output = createMemo<RenderedSquare>(() => {
     tick()
-    const time = now() / 1000
-    const size = normalizeSize(props.size)
+    const columns = normalizeSize(props.columns)
+    const pixelRows = normalizeSize(props.pixelRows)
     const current = transition
 
-    if (!current) return renderSquare(props.mood, size, time)
+    if (!current) return renderSquare(props.mood, columns, pixelRows, phase)
 
     const raw = clamp((now() - current.start) / MORPH_MS, 0, 1)
-    if (raw >= 1) return renderSquare(props.mood, size, time)
+    if (raw >= 1) return renderSquare(props.mood, columns, pixelRows, phase)
 
     const progress = ease(raw)
     const field = blendFields(
-      sampleField(current.from, time, size),
-      sampleField(current.to, time, size),
+      sampleField(current.from, phase, columns, pixelRows),
+      sampleField(current.to, phase, columns, pixelRows),
       progress,
     )
     const palette = blendPalettes(paletteFor(current.from), paletteFor(current.to), progress)
-    const caption = progress < 0.45 ? captionFor(current.from, size) : captionFor(current.to, size)
-    return renderField(field, size, palette, caption)
+    const caption = progress < 0.45 ? captionFor(current.from, columns) : captionFor(current.to, columns)
+    return renderField(field, columns, pixelRows, palette, caption)
   })
 
   createEffect(() => {

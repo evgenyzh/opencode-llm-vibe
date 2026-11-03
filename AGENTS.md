@@ -1,6 +1,6 @@
 # llm-vibe
 
-OpenCode V2 plugin: модель опционально объявляет текущее настроение через tool `vibe`, а TUI рисует квадратное анимированное псевдографическое изображение в сайдбаре. `/vibe` открывает большую панель.
+OpenCode V2 plugin: модель опционально объявляет текущее настроение через tool `vibe`, а TUI рисует анимированный псевдографический прямоугольник в сайдбаре. `/vibe` открывает большую панель.
 
 **Сначала читать:** [`SPEC.md`](./SPEC.md) — детальное ТЗ, [`PLAN.md`](./PLAN.md) — порядок реализации и критерии приёмки.
 
@@ -9,9 +9,9 @@ OpenCode V2 plugin: модель опционально объявляет те�
 Реализовано и проверено в OpenCode 2.2.5:
 
 - server-part: prompt hook, tool `vibe`, RPC-событие;
-- TUI-part: sidebar-квадрат, `/vibe`-панель, fullscreen по `f`, анимация и morph;
+- TUI-part: sidebar-прямоугольник, `/vibe`-панель, fullscreen по `f`, анимация и morph;
 - тесты, сборка, `npm pack --dry-run`;
-- ручная проверка в TUI: set, clear, toggle, fullscreen, restart → пустой квадрат;
+- ручная проверка в TUI: set, clear, toggle, fullscreen, restart → пустой прямоугольник;
 - замер фиксированного overhead: **+101 input token** на request (DeepSeek V4 Flash через Bifrost, 3 прогона).
 
 ## Архитектура
@@ -21,8 +21,9 @@ OpenCode V2 plugin: модель опционально объявляет те�
 - Одно RPC-событие `updated` с `{ sessionID, mood: Mood | null }`. `clear` — это `mood: null`.
 - **Никакого серверного хранилища:** без `ctx.storage`, БД, файлов, серверного `Map`, `scan.ts` и чтения истории. TUI хранит только `Record<sessionID, Mood | null>` в module-level Solid store.
 - Tool `vibe` опционален. Модель может вызывать его сколько угодно раз; последний вызов побеждает. `vibe({ clear: true })` — необязательный вызов, когда модель хочет убрать vibe. Результат tool — `ok`, без эха mood.
-- TUI при перезапуске/пропуске события показывает тёмный пустой квадрат; восстановления из истории нет — это осознанно. Auto-clear и auto-open отсутствуют.
-- Sidebar (`sidebar.content`, `prepend`) виден всегда, когда открыт сайдбар; по умолчанию тёмный пустой квадрат. `/vibe` открывает `session.panel` с именем `llm-vibe.mood`. Слова рисуются внутри нижней части квадрата; stage-индикаторов и истории нет.
+- TUI при перезапуске/пропуске события показывает тёмный пустой прямоугольник; восстановления из истории нет — это осознанно. Auto-clear и auto-open отсутствуют.
+- Sidebar (`sidebar.content`, `prepend`) виден всегда, когда открыт сайдбар; по умолчанию тёмный пустой прямоугольник 24×18 пикселей. `/vibe` открывает `session.panel` с именем `llm-vibe.mood`; размер адаптируется к ширине панели (`columns 16..32`, `pixelRows = columns * 0.75`). Слова рисуются внутри нижней части; stage-индикаторов и истории нет.
+- Темп анимации зависит от live-активности: `idle 0.35×`, `waiting 0.8×`, `thinking 1.5×`, `writing 1.9×`, `tool 2.4×`. TUI слушает `session.*` события; модель не обязана вызывать tool для смены темпа.
 - Загрузка — через `opencode.json(c)` → `plugins`; нужны обе части. Одного `cli.json` с TUI-частью недостаточно.
 - Код плагина вотчится сервером/CLI: после `npm run build` работающий сервер пишет `loading plugin ... dist/index.js`. Полный рестарт не нужен; `/reload` — если вотчер пропустил.
 
@@ -32,8 +33,8 @@ OpenCode V2 plugin: модель опционально объявляет те�
 - Server entry: `Plugin.define` из `@opencode/plugin`; RPC — из `@opencode/plugin/rpc`.
 - Package exports: `.`, `./tui`, `./rpc`; сборка в `dist`, `type: module`.
 - Версии: `@opencode/plugin` 2.2.5, peers `@opentui/core`/`@opentui/solid` >= 0.8.0, `solid-js` >= 1.9.0.
-- `session.panel` даёт `name`, `sessionID`, `width`, `focused`, `close()`, `toggleFullscreen()`. `sidebar.content` даёт только `sessionID`; размер квадрата фиксированный (20 колонок).
-- Half-block: `▀`, `fg` = верхний пиксель, `bg` = нижний, 24-bit. `N×N` пикселей → `N` колонок × `N/2` строк.
+- `session.panel` даёт `name`, `sessionID`, `width`, `focused`, `close()`, `toggleFullscreen()`. `sidebar.content` даёт только `sessionID`; sidebar фиксирован (24 колонки × 9 строк).
+- Half-block: `▀`, `fg` = верхний пиксель, `bg` = нижний, 24-bit. `W×H` пикселей → `W` колонок × `H/2` строк.
 - **Важно:** Solid-обёртка `<text content={...}>` приводит `StyledText` к строке (`[object Object]`). Собирать `StyledText` через `t`/`fg`/`bg`/`new StyledText(chunks)` и присваивать через `ref`: `text.content = square.text`.
 - Host renderables не являются API; не зависеть от их структуры. OpenTUI-ресурсы с owner — только через `context.renderer.nativeScene` и с cleanup.
 - V1 docs (`https://opencode.ai/docs/`) не применять.

@@ -52,21 +52,27 @@ function valueNoise(x: number, y: number, seed: number): number {
 }
 
 /**
- * Samples an N×N field in [0, 1]. `mood: null` is a static dark vignette;
- * a mood produces moving blobs plus low-frequency noise.
+ * Samples a width×height pixel field in [0, 1]. `mood: null` is a static dark
+ * vignette; a mood produces moving blobs plus low-frequency noise.
  */
-export function sampleField(mood: Mood | null, time: number, size: number): Float32Array {
-  const n = normalizeSize(size)
-  const field = new Float32Array(n * n)
+export function sampleField(
+  mood: Mood | null,
+  time: number,
+  width: number,
+  height: number = width,
+): Float32Array {
+  const w = normalizeSize(width)
+  const h = normalizeSize(height)
+  const field = new Float32Array(w * h)
   const t = Number.isFinite(time) ? time : 0
 
   if (mood === null) {
-    for (let y = 0; y < n; y += 1) {
-      for (let x = 0; x < n; x += 1) {
-        const nx = ((x + 0.5) / n) * 2 - 1
-        const ny = ((y + 0.5) / n) * 2 - 1
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const nx = ((x + 0.5) / w) * 2 - 1
+        const ny = ((y + 0.5) / h) * 2 - 1
         const distance = Math.max(Math.abs(nx), Math.abs(ny))
-        field[y * n + x] = clamp(0.58 - distance * 0.38, 0, 1)
+        field[y * w + x] = clamp(0.58 - distance * 0.38, 0, 1)
       }
     }
     return field
@@ -90,10 +96,10 @@ export function sampleField(mood: Mood | null, time: number, size: number): Floa
     }
   })
 
-  for (let y = 0; y < n; y += 1) {
-    for (let x = 0; x < n; x += 1) {
-      const nx = (x + 0.5) / n
-      const ny = (y + 0.5) / n
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const nx = (x + 0.5) / w
+      const ny = (y + 0.5) / h
 
       let value = 0
       let total = 0
@@ -120,7 +126,7 @@ export function sampleField(mood: Mood | null, time: number, size: number): Floa
       // the last color often stays almost invisible.
       value = smoothstep(0.12, 0.85, value)
 
-      field[y * n + x] = clamp(value, 0, 1)
+      field[y * w + x] = clamp(value, 0, 1)
     }
   }
 

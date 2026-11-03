@@ -34,6 +34,16 @@ describe("sampleField", () => {
     expectValidField(sampleField(excited, 1.5, 31), 30)
   })
 
+  it("supports rectangular fields", () => {
+    const field = sampleField(calm, 0, 24, 18)
+    expect(field).toHaveLength(24 * 18)
+    for (const value of field) {
+      expect(Number.isFinite(value)).toBe(true)
+      expect(value).toBeGreaterThanOrEqual(0)
+      expect(value).toBeLessThanOrEqual(1)
+    }
+  })
+
   it("is deterministic for the same mood, time and size", () => {
     expect(Array.from(sampleField(calm, 2.5, 20))).toEqual(Array.from(sampleField(calm, 2.5, 20)))
   })

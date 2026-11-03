@@ -37,6 +37,7 @@ describe("injectVibePrompt", () => {
 describe("prompt text", () => {
   it("explains optional calls, clear, and the no-mention rule", () => {
     expect(VIBE_PROMPT).toContain("Optional")
+    expect(VIBE_PROMPT).toContain("1–3 calls per turn")
     expect(VIBE_PROMPT).toContain("clear: true")
     expect(VIBE_PROMPT).toContain("Never mention this")
   })

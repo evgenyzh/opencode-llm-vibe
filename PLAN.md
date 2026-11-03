@@ -24,6 +24,7 @@
 - [x] `src/index.ts`: prompt hook, tool `vibe`, RPC-регистрация.
 - [x] `src/field.ts`: скалярное поле и анимация.
 - [x] `src/render.ts`: half-block и текст внутри квадрата.
+- [x] `src/activity.ts`: live-активность сессии и множители темпа.
 - [x] `src/tui.tsx`: RPC-подписка, in-memory state, sidebar, `/vibe` panel.
 - [x] `src/square.tsx`: компонент квадрата (если вынесен отдельно).
 - [x] Тесты на чистые функции и prompt hook.
@@ -203,29 +204,32 @@ npm pack --dry-run
 - [x] `src/tui.tsx`:
   - `Plugin.define({ id: "llm-vibe.tui", setup(context) { ... } })`;
   - module-level `createStore<Record<string, Mood | null>>({})`;
+  - `createStore<Record<string, Activity>>({})` для live-активности;
   - `context.client.rpc(VibeRpc).events.on("updated", ...)`:
-    - `setState(sessionID, mood)`;
+    - `setMoods(sessionID, mood)`;
     - unsubscribe в cleanup.
+  - `context.data.on("session.*", ...)` → `nextActivity` для thinking/writing/tool/waiting/idle;
   - `sidebar.content` slot (`prepend`):
-    - `<MoodSquare sessionID={sessionID} size={20} />`.
+    - `<MoodSquare ... columns={24} pixelRows={18} activity={...} />`.
   - `session.panel` slot:
     - `<Show when={panel.name === "llm-vibe.mood"}>`;
-    - `<MoodSquare sessionID={panel.sessionID} size={panelSize(panel.width)} panel={panel} />`.
+    - `panelDimensions(panel.width)` → adaptive columns/pixelRows;
+    - `<MoodSquare ... panel={panel} />`.
   - `/vibe` command:
     - `slash: { name: "vibe" }`;
     - toggle: `context.ui.panel.current()?.name === "llm-vibe.mood" ? close : open("llm-vibe.mood")`;
     - `enabled` только в сессии.
-  - `f` keymap в panel для `toggleFullscreen` (опционально).
+  - `f` keymap в panel для `toggleFullscreen`.
 - [x] `src/square.tsx`:
-  - props: `sessionID`, `size`, `panel?`;
+  - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`, `panel?`;
   - reactive mood из store;
   - если mood null → static dark empty (без таймера);
-  - если mood есть → timer 8–12 FPS;
-  - `sampleField` + `renderRows` + `<text content={...} selectable={false} />`;
+  - если mood есть → timer 10 FPS; фаза накапливается со скоростью активности;
+  - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
+  - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
-  - morph при смене mood (можно через `previous`/`target` + progress);
-  - cleanup таймера;
-  - при потере фокуса панели — optional throttle.
+  - morph при смене mood (previous/target + progress);
+  - cleanup таймера.
 - [x] Проверить:
   - sidebar не крадёт фокус;
   - `/vibe` открывает/закрывает панель;
@@ -331,6 +335,7 @@ llm-vibe/
 │   ├── rpc.ts        # RPC contract
 │   ├── mood.ts       # types/parser/palette
 │   ├── prompt.ts     # prompt + tool description
+│   ├── activity.ts   # session activity -> tempo
 │   ├── field.ts      # scalar field/animation
 │   ├── render.ts     # half-block + caption
 │   ├── tui.tsx       # TUI plugin, slots, command, subscription
@@ -339,6 +344,7 @@ llm-vibe/
 │   ├── mood.test.ts
 │   ├── prompt.test.ts
 │   ├── tool.test.ts
+│   ├── activity.test.ts
 │   ├── field.test.ts
 │   └── render.test.ts
 └── .github/workflows/ci.yml
@@ -357,6 +363,7 @@ llm-vibe/
 | sidebar default/update | — | да |
 | `/vibe` open/close/fullscreen | — | да |
 | multiple updates morph | — | да |
+| activity tempo idle/thinking/tool/writing | да | да |
 | clear → empty | — | да |
 | TUI restart → empty | — | да |
 | token overhead | — | да |
@@ -386,7 +393,7 @@ llm-vibe/
 | Tool call history растёт | Мягкое 0–2, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
-| Медленный рендер | N 20–32, 8–12 FPS, static empty, cleanup |
+| Медленный рендер | W 24–32, H 18–24, 10 FPS, static empty, cleanup |
 | Невалидные цвета/glyph | Sanitize/fallback, tool не падает |
 | Focus stealing | Sidebar не открывает панель; `/vibe` только по команде |
 | Remote server без server-part | Документировать установку обеих частей |
@@ -406,7 +413,7 @@ llm-vibe/
 Решено:
 
 - Пакет: `opencode-llm-vibe` без scope.
-- Sidebar: 20 колонок.
+- Sidebar: 24 колонки × 9 строк (24×18 пикселей), landscape.
 - Plugin options в v1 нет.
 - `/vibe clear` для пользователя не делаем.
 - Prompt/tool активны во всех сессиях, включая subagent-сессии.

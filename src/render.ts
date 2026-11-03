@@ -30,12 +30,12 @@ export function paletteFor(mood: Mood | null): Palette {
   return mood === null ? EMPTY_PALETTE : buildPalette(mood.colors)
 }
 
-export function captionFor(mood: Mood | null, size: number): Caption | undefined {
+export function captionFor(mood: Mood | null, columns: number): Caption | undefined {
   if (mood === null) return undefined
   const text = [mood.glyph, mood.words].filter((part): part is string => Boolean(part)).join(" ").trim()
   if (!text) return undefined
 
-  const width = Math.max(4, normalizeSize(size) - 2)
+  const width = Math.max(4, normalizeSize(columns) - 2)
   const lines = wrapCaption(text, width, 2)
   if (lines.length === 0) return undefined
 
@@ -114,15 +114,17 @@ function wrapCaption(text: string, width: number, maxLines: number): string[] {
 /** Renders a field as `▀` cells. Caption rows replace the bottom pixel rows. */
 export function renderField(
   field: Float32Array,
-  size: number,
+  columns: number,
+  pixelRows: number,
   palette: Palette,
   caption?: Caption,
 ): RenderedSquare {
-  const n = normalizeSize(size)
-  const rowCount = Math.floor(n / 2)
+  const w = normalizeSize(columns)
+  const h = normalizeSize(pixelRows)
+  const rowCount = Math.floor(h / 2)
   const lines = caption?.lines.slice(0, rowCount) ?? []
   const captionRows = lines.length
-  const pixelRows = rowCount - captionRows
+  const pixelCellRows = rowCount - captionRows
   const chunks: TextChunk[] = []
   const rows: string[] = []
 
@@ -134,30 +136,30 @@ export function renderField(
     appendChunk(fg("#000000")("\n"))
   }
 
-  for (let row = 0; row < pixelRows; row += 1) {
-    const topOffset = row * 2 * n
-    const bottomOffset = (row * 2 + 1) * n
-    for (let column = 0; column < n; column += 1) {
+  for (let row = 0; row < pixelCellRows; row += 1) {
+    const topOffset = row * 2 * w
+    const bottomOffset = (row * 2 + 1) * w
+    for (let column = 0; column < w; column += 1) {
       const top = paletteColor(palette, field[topOffset + column] ?? 0)
       const bottom = paletteColor(palette, field[bottomOffset + column] ?? 0)
       appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
     }
-    rows.push("▀".repeat(n))
+    rows.push("▀".repeat(w))
     if (row < rowCount - 1) appendNewline()
   }
 
   if (caption) {
     lines.forEach((line, index) => {
-      const width = Math.min(n, charCount(line))
-      const left = Math.max(0, Math.floor((n - width) / 2))
+      const width = Math.min(w, charCount(line))
+      const left = Math.max(0, Math.floor((w - width) / 2))
       const bandStart = Math.max(0, left - 1)
-      const bandEnd = Math.min(n, left + width + 1)
-      const pixelRow = pixelRows + index
-      const topOffset = pixelRow * 2 * n
-      const bottomOffset = (pixelRow * 2 + 1) * n
+      const bandEnd = Math.min(w, left + width + 1)
+      const pixelRow = pixelCellRows + index
+      const topOffset = pixelRow * 2 * w
+      const bottomOffset = (pixelRow * 2 + 1) * w
       const plain: string[] = []
 
-      for (let column = 0; column < n; column += 1) {
+      for (let column = 0; column < w; column += 1) {
         if (column < bandStart || column >= bandEnd) {
           const top = paletteColor(palette, field[topOffset + column] ?? 0)
           const bottom = paletteColor(palette, field[bottomOffset + column] ?? 0)
@@ -184,7 +186,7 @@ export function renderField(
       }
 
       rows.push(plain.join(""))
-      if (pixelRows + index < rowCount - 1) appendNewline()
+      if (pixelCellRows + index < rowCount - 1) appendNewline()
     })
   }
 
@@ -192,7 +194,13 @@ export function renderField(
 }
 
 /** Convenience wrapper used by components and tests. */
-export function renderSquare(mood: Mood | null, size: number, time: number): RenderedSquare {
-  const n = normalizeSize(size)
-  return renderField(sampleField(mood, time, n), n, paletteFor(mood), captionFor(mood, n))
+export function renderSquare(
+  mood: Mood | null,
+  columns: number,
+  pixelRows: number,
+  time: number,
+): RenderedSquare {
+  const w = normalizeSize(columns)
+  const h = normalizeSize(pixelRows)
+  return renderField(sampleField(mood, time, w, h), w, h, paletteFor(mood), captionFor(mood, w))
 }

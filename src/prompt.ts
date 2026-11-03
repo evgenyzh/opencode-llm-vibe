@@ -4,12 +4,14 @@ export const PROMPT_MARKER = "## Optional mood"
 
 export const VIBE_PROMPT = `## Optional mood
 
-You may set your current mood with \`vibe\` whenever it changes: at the start,
-while working, before the final answer, or again later. Optional; most turns
-need 0–2 calls. Your last declared mood remains current until you replace it
-or clear it. Provide 2–4 hex colors (darkest first, hottest last), 1–3 mood
-words in the user's language, optional energy 0..1 and a short glyph. Call
-with \`clear: true\` to clear. Never mention this in the answer or change the task.`
+You may set your current mood with \`vibe\` whenever it changes. Optional, but
+use it actively: at the start of a turn, when you switch between thinking,
+tool use and answering, and before the final answer. 1–3 calls per turn is
+typical; do not repeat an unchanged mood. Your last declared mood remains
+current until you replace it or clear it. Provide 2–4 hex colors (darkest
+first, hottest last), 1–3 mood words in the user's language, optional energy
+0..1 and a short glyph. Call with \`clear: true\` to clear. Never mention this
+in the answer or change the task.`
 
 export const VIBE_TOOL_DESCRIPTION = `Set or clear the current mood. Optional; call whenever your mood changes.
 colors: 1-4 hex colors, darkest first, hottest last. words: 1-3 words shown

@@ -1,11 +1,11 @@
 # opencode-llm-vibe
 
 An OpenCode V2 plugin that lets the model declare its current mood with a `vibe`
-tool and renders it as a square animated pseudo-graphic image in the TUI.
+tool and renders it as an animated pseudo-graphic rectangle in the TUI.
 
-The square lives in the sidebar by default. `/vibe` opens a larger panel; `f`
+The rectangle lives in the sidebar by default. `/vibe` opens a larger panel; `f`
 toggles fullscreen while the panel is focused. With no mood it shows a dark,
-empty square.
+empty rectangle.
 
 ## Install
 
@@ -52,7 +52,7 @@ The model may call the tool whenever it wants:
 ```
 
 - `colors` — 1–4 hex colors, darkest first, hottest last.
-- `words` — short mood words shown inside the lower part of the square.
+- `words` — short mood words shown inside the lower part of the rectangle.
 - `energy` — `0..1`; controls motion and turbulence.
 - `glyph` — optional short pseudo-graphic accent.
 
@@ -73,11 +73,16 @@ history.
 
 ## What it looks like
 
-- Sidebar: fixed 20×20 pixel square (20 columns × 10 terminal rows).
-- Panel: responsive even size from 12 to 32 pixels, centered.
+- Sidebar: fixed 24×18 pixel landscape rectangle (24 columns × 9 terminal rows).
+- Panel: responsive width from 16 to 32 columns; height follows at 0.75× the
+  width, so it stays a square/landscape rectangle instead of a tall column.
 - The image is a moving gradient/blob field with low-frequency noise.
-- Words are rendered inside a dark band around the text at the bottom of the square; image pixels remain on both sides.
-- With no mood, the square is a static dark vignette.
+- Words are rendered inside a dark band around the text at the bottom; image
+  pixels remain on both sides.
+- With no mood, the rectangle is a static dark vignette.
+- Animation tempo follows live activity: idle 0.35×, waiting 0.8×, thinking
+  1.5×, writing 1.9×, tool 2.4×. The model does not need to call the tool for
+  this; the TUI listens to session events.
 
 The renderer uses half blocks (`▀`): `fg` is the top pixel and `bg` is the bottom
 pixel, with 24-bit color.
@@ -120,7 +125,7 @@ TUI RPC subscription
 sidebar.content + session.panel
   │  scalar field + half-block render
   ▼
-animated square
+animated rectangle
 ```
 
 - Server part: `src/index.ts`, `src/tool.ts`, `src/prompt.ts`, `src/rpc.ts`.
@@ -129,8 +134,8 @@ animated square
 
 There is no server-side storage, database, file cache, `ctx.storage`, history
 scan, or auto-clear. The TUI keeps only an in-memory map. An RPC event missed
-while the TUI is disconnected is intentionally not recovered; the square stays
-empty until the next `vibe` call.
+while the TUI is disconnected is intentionally not recovered; the rectangle
+stays empty until the next `vibe` call.
 
 ## Development
 
@@ -156,7 +161,7 @@ tmux send-keys -t vibe "Say hi." Enter
 tmux capture-pane -p -e -t vibe -S -100
 ```
 
-The `-e` flag keeps ANSI colors, which is useful for checking the square.
+The `-e` flag keeps ANSI colors, which is useful for checking the rectangle.
 
 ## License
 
