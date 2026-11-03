@@ -1,19 +1,13 @@
-/** TUI part: RPC subscription, sidebar rectangle, and the /vibe panel. */
+/** TUI part: RPC subscription, sidebar rectangle, and the /vibe toggle. */
 
 import { Plugin } from "@opencode/plugin/tui"
-import { Show } from "solid-js"
+import { createSignal, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { nextActivity, type Activity, type ActivityEvent } from "./activity.js"
-import {
-  panelDimensions,
-  SIDEBAR_COLUMNS,
-  SIDEBAR_PIXEL_ROWS,
-} from "./dimensions.js"
+import { SIDEBAR_COLUMNS, SIDEBAR_PIXEL_ROWS } from "./dimensions.js"
 import type { Mood } from "./mood.js"
 import { VibeRpc } from "./rpc.js"
 import { MoodSquare } from "./square.js"
-
-const PANEL_NAME = "llm-vibe.mood"
 
 /** Live-only TUI state. Restarting the TUI intentionally loses it. */
 const [moods, setMoods] = createStore<Record<string, Mood | null>>({})
@@ -22,6 +16,7 @@ const [activities, setActivities] = createStore<Record<string, Activity>>({})
 export default Plugin.define({
   id: "llm-vibe.tui",
   setup(context) {
+    const [visible, setVisible] = createSignal(true)
     const vibe = context.client.rpc(VibeRpc)
     const unsubscribe = vibe.events.on("updated", (event) => {
       const data = event.data as { sessionID: string; mood: Mood | null }
@@ -61,33 +56,16 @@ export default Plugin.define({
     context.ui.slot({
       prepend: "sidebar.content",
       render: ({ sessionID }) => (
-        <MoodSquare
-          sessionID={sessionID}
-          mood={moods[sessionID] ?? null}
-          columns={SIDEBAR_COLUMNS}
-          pixelRows={SIDEBAR_PIXEL_ROWS}
-          activity={activities[sessionID] ?? "idle"}
-        />
+        <Show when={visible()}>
+          <MoodSquare
+            sessionID={sessionID}
+            mood={moods[sessionID] ?? null}
+            columns={SIDEBAR_COLUMNS}
+            pixelRows={SIDEBAR_PIXEL_ROWS}
+            activity={activities[sessionID] ?? "idle"}
+          />
+        </Show>
       ),
-    })
-
-    context.ui.slot({
-      append: "session.panel",
-      render: (panel) => {
-        const dimensions = (): ReturnType<typeof panelDimensions> => panelDimensions(panel.width)
-        return (
-          <Show when={panel.name === PANEL_NAME}>
-            <MoodSquare
-              sessionID={panel.sessionID}
-              mood={moods[panel.sessionID] ?? null}
-              columns={dimensions().columns}
-              pixelRows={dimensions().pixelRows}
-              activity={activities[panel.sessionID] ?? "idle"}
-              panel={panel}
-            />
-          </Show>
-        )
-      },
     })
 
     context.keymap.layer(() => ({
@@ -95,17 +73,13 @@ export default Plugin.define({
       commands: [
         {
           id: "llm-vibe.toggle",
-          title: "Toggle vibe panel",
-          description: "Show or hide the current mood square",
+          title: "Toggle vibe in sidebar",
+          description: "Show or hide the mood rectangle in the sidebar",
           group: "Vibe",
           slash: { name: "vibe" },
           enabled: () => context.ui.router.current().type === "session",
           run: () => {
-            if (context.ui.panel.current()?.name === PANEL_NAME) {
-              context.ui.panel.close()
-              return
-            }
-            context.ui.panel.open(PANEL_NAME)
+            setVisible((value) => !value)
           },
         },
       ],

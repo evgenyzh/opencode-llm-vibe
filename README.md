@@ -3,9 +3,8 @@
 An OpenCode V2 plugin that lets the model declare its current mood with a `vibe`
 tool and renders it as an animated pseudo-graphic rectangle in the TUI.
 
-The rectangle lives in the sidebar by default. `/vibe` opens a larger panel; `f`
-toggles fullscreen while the panel is focused. With no mood it shows a dark,
-empty rectangle.
+The rectangle lives in the sidebar. `/vibe` toggles it on or off; with no mood
+the slot blends into the theme background.
 
 ## Install
 
@@ -83,16 +82,15 @@ remove the mood, the model calls:
 `ok` and never echoes the mood back, so the model does not pay for a copy of its
 own input.
 
-`/vibe` toggles the larger panel. Closing the panel or restarting the TUI does
-not change the mood; the state is live-only and is not restored from session
-history.
+`/vibe` toggles the rectangle in the sidebar. Hiding it or restarting the TUI
+does not change the mood; the state is live-only and is not restored from
+session history.
 
 ## What it looks like
 
-- Sidebar: fixed 24×18 pixel landscape rectangle (24 columns × 9 terminal rows).
-- Panel: fills the available width (16..64 columns); height follows at 0.55×
-  the width, so it reads as a wide landscape rectangle. The blob is sampled
-  with a small virtual margin so it does not touch the edges.
+- Sidebar: measures its own width, fills it (24 columns by default, up to 64),
+  and keeps a landscape aspect. The blob is sampled with a virtual margin so it
+  does not touch the edges.
 - The image is a moving gradient/blob field with low-frequency noise.
 - Empty pixels fade into the TUI theme background; there is no vignette or
   visible rectangle around the image.
@@ -144,20 +142,20 @@ server tool
 TUI RPC subscription
   │  in-memory Record<sessionID, Mood | null>
   ▼
-sidebar.content + session.panel
-  │  scalar field + half-block render
+sidebar.content
+  │  measured width + scalar field + half-block render
   ▼
 animated rectangle
 ```
 
 - Server part: `src/index.ts`, `src/tool.ts`, `src/prompt.ts`, `src/rpc.ts`.
-- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/activity.ts`, `src/motion.ts`, `src/morph.ts`, `src/field.ts`, `src/render.ts`.
+- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/dimensions.ts`, `src/activity.ts`, `src/motion.ts`, `src/morph.ts`, `src/field.ts`, `src/render.ts`.
 - Shared protocol: `src/mood.ts`, `src/rpc.ts`.
 
 There is no server-side storage, database, file cache, `ctx.storage`, history
 scan, or auto-clear. The TUI keeps only an in-memory map. An RPC event missed
-while the TUI is disconnected is intentionally not recovered; the rectangle
-stays empty until the next `vibe` call.
+while the TUI is disconnected is intentionally not recovered; the slot stays
+blank until the next `vibe` call.
 
 ## Development
 

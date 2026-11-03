@@ -1,4 +1,4 @@
-/** Fixed slot sizes and the adaptive /vibe panel rectangle. */
+/** Fixed fallbacks and the adaptive sidebar rectangle. */
 
 import { normalizeSize } from "./field.js"
 
@@ -11,12 +11,12 @@ export interface SquareDimensions {
 }
 
 /**
- * Fills the available panel width and keeps a wide, landscape rectangle.
- * Terminal cells are roughly twice as tall as wide, so 0.55 pixel rows per
- * column still reads as a rectangle instead of a square.
+ * Uses the measured sidebar width and keeps the rectangle landscape. Terminal
+ * cells are roughly twice as tall as wide, so 0.65 pixel rows per column reads
+ * as a wide rectangle rather than a square.
  */
-export function panelDimensions(width: number): SquareDimensions {
-  const columns = Math.max(16, Math.min(64, normalizeSize(width - 2)))
-  const pixelRows = Math.max(14, Math.min(28, normalizeSize(Math.round(columns * 0.55))))
+export function sidebarDimensions(width: number): SquareDimensions {
+  const columns = Math.max(16, Math.min(64, normalizeSize(width)))
+  const pixelRows = Math.max(18, Math.min(28, normalizeSize(Math.round(columns * 0.65))))
   return { columns, pixelRows }
 }

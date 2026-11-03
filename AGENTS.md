@@ -1,6 +1,6 @@
 # llm-vibe
 
-OpenCode V2 plugin: модель опционально объявляет текущее настроение через tool `vibe`, а TUI рисует анимированный псевдографический прямоугольник в сайдбаре. `/vibe` открывает большую панель.
+OpenCode V2 plugin: модель опционально объявляет текущее настроение через tool `vibe`, а TUI рисует анимированный псевдографический прямоугольник в сайдбаре. `/vibe` включает/выключает показ в сайдбаре.
 
 **Сначала читать:** [`SPEC.md`](./SPEC.md) — детальное ТЗ, [`PLAN.md`](./PLAN.md) — порядок реализации и критерии приёмки.
 
@@ -9,15 +9,15 @@ OpenCode V2 plugin: модель опционально объявляет те�
 Реализовано и проверено в OpenCode 2.2.5:
 
 - server-part: prompt hook, tool `vibe`, RPC-событие;
-- TUI-part: sidebar-прямоугольник, `/vibe`-панель, fullscreen по `f`, анимация и morph;
+- TUI-part: sidebar-прямоугольник, `/vibe` toggle, измерение ширины через `onSizeChange`, анимация и morph;
 - live-темп из `session.*` событий, сглаживание `motion.ts`, сохранение phase/tempo в памяти;
 - тесты, сборка, `npm pack --dry-run`;
-- ручная проверка в TUI: set, clear, toggle, fullscreen, restart → слот сливается с фоном темы;
+- ручная проверка в TUI: set, clear, toggle, restart → слот сливается с фоном темы;
 - замер фиксированного overhead: **+135 input token** на request (DeepSeek V4 Flash через Bifrost, 3 прогона).
 
 ## Архитектура
 
-- Это **нативный плагин V2**, не MCP: server-part нужен для system prompt и tool, TUI-part — для панели.
+- Это **нативный плагин V2**, не MCP: server-part нужен для system prompt и tool, TUI-part — для sidebar.
 - Server-part (`src/index.ts`, `src/tool.ts`): `ctx.session.hook("context")` добавляет опциональную инструкцию, `ctx.tool.transform` регистрирует tool `vibe`, RPC-регистрация отдаёт событие.
 - Одно RPC-событие `updated` с `{ sessionID, mood: Mood | null }`. `clear` — это `mood: null`.
 - **Никакого серверного хранилища:** без `ctx.storage`, БД, файлов, серверного `Map`, `scan.ts` и чтения истории. TUI хранит только `Record<sessionID, Mood | null>` в module-level Solid store.
@@ -25,8 +25,9 @@ OpenCode V2 plugin: модель опционально объявляет те�
 - `preset` (`calm/focus/warm/alert/playful/tired`) — сахар: парсер разворачивает его в конкретные `colors`; явные цвета важнее preset. Промпт просит менять палитру вместе с настроением.
 - Morph длится ~1 с. Если новый `vibe` приходит во время морфа, следующий переход стартует со снимка текущих field + palette, а не с предыдущей цели — цвет не откатывается и не прыгает.
 - TUI при перезапуске/пропуске события показывает слот цвета фона темы; восстановления из истории нет — это осознанно. Auto-clear и auto-open отсутствуют.
-- Sidebar (`sidebar.content`, `prepend`) виден всегда, когда открыт сайдбар; по умолчанию слот сливается с фоном темы (24×9 ячеек). `/vibe` открывает `session.panel` с именем `llm-vibe.mood`; размер адаптируется к ширине панели (`columns 16..64`, `pixelRows ≈ columns * 0.55`), это широкий прямоугольник. Поле сэмплируется с виртуальным отступом 8%, чтобы blob не касался краёв. Слова рисуются внутри нижней части; stage-индикаторов и истории нет.
-- Фон поля и полосы под текст — `context.theme.background.raised.base` (поверхность sidebar/panel), текст — `context.theme.text.base`. Виньетки по краям нет: низкие значения field плавно уходят в фон темы, поэтому видимого прямоугольника нет.
+- Sidebar (`sidebar.content`, `prepend`) измеряет собственную ширину через `ref` + `onSizeChange`/`getLayout().width`; размеры: `columns = clamp(even(width), 16, 64)`, `pixelRows = clamp(even(round(columns * 0.65)), 18, 28)`. Fallback — 24×18. Поле сэмплируется с виртуальным отступом 12%, чтобы blob не касался краёв. Слова рисуются внутри нижней части; stage-индикаторов и истории нет.
+- `/vibe` — не панель, а toggle видимости sidebar-слота. При выключении `MoodSquare` размонтируется и таймер останавливается; mood в store сохраняется.
+- Фон поля и полосы под текст — `context.theme.background.raised.base` (поверхность sidebar), текст — `context.theme.text.base`. Виньетки по краям нет: низкие значения field плавно уходят в фон темы, поэтому видимого прямоугольника нет.
 - Темп анимации зависит от live-активности: `idle 0.45×`, `waiting 0.8×`, `thinking 1.25×`, `writing 1.55×`, `tool 1.9×`; скорость сглаживается за ~300 мс, фаза не сбрасывается. TUI слушает `session.*` события; модель не обязана вызывать tool для смены темпа.
 - Загрузка — через `opencode.json(c)` → `plugins`; нужны обе части. Одного `cli.json` с TUI-частью недостаточно.
 - Код плагина вотчится сервером/CLI: после `npm run build` работающий сервер пишет `loading plugin ... dist/index.js`. Полный рестарт не нужен; `/reload` — если вотчер пропустил.
@@ -37,7 +38,7 @@ OpenCode V2 plugin: модель опционально объявляет те�
 - Server entry: `Plugin.define` из `@opencode/plugin`; RPC — из `@opencode/plugin/rpc`.
 - Package exports: `.`, `./tui`, `./rpc`; сборка в `dist`, `type: module`.
 - Версии: `@opencode/plugin` 2.2.5, peers `@opentui/core`/`@opentui/solid` >= 0.8.0, `solid-js` >= 1.9.0.
-- `session.panel` даёт `name`, `sessionID`, `width`, `focused`, `close()`, `toggleFullscreen()`. `sidebar.content` даёт только `sessionID`; sidebar фиксирован (24 колонки × 9 строк).
+- `sidebar.content` даёт только `sessionID`; ширину меряем у собственного `<box>` через `onSizeChange`/`getLayout().width`. `session.panel` больше не используется.
 - Half-block: `▀`, `fg` = верхний пиксель, `bg` = нижний, 24-bit. `W×H` пикселей → `W` колонок × `H/2` строк.
 - **Важно:** Solid-обёртка `<text content={...}>` приводит `StyledText` к строке (`[object Object]`). Собирать `StyledText` через `t`/`fg`/`bg`/`new StyledText(chunks)` и присваивать через `ref`: `text.content = square.text`.
 - Host renderables не являются API; не зависеть от их структуры. OpenTUI-ресурсы с owner — только через `context.renderer.nativeScene` и с cleanup.

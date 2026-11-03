@@ -1,11 +1,10 @@
-/** Animated rectangle shared by the sidebar slot and the /vibe panel. */
+/** Animated rectangle rendered in the session sidebar. */
 
 import { usePlugin } from "@opencode/plugin/tui"
-import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { TextRenderable } from "@opentui/core"
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { activitySpeed, type Activity } from "./activity.js"
-import { normalizeSize } from "./field.js"
+import { sidebarDimensions } from "./dimensions.js"
 import type { Mood, Rgb } from "./mood.js"
 import { MORPH_MS, visualAt, type Transition } from "./morph.js"
 import { advanceMotion, type MotionState } from "./motion.js"
@@ -14,16 +13,16 @@ import { captionFor, renderField, type CaptionColors, type RenderedSquare } from
 const FPS = 12
 const FRAME_MS = 1000 / FPS
 
-/** Motion survives host re-renders; sidebar and panel animate independently. */
+/** Motion survives host re-renders; each sidebar instance animates independently. */
 const motions = new Map<string, MotionState>()
 
 export interface MoodSquareProps {
   readonly sessionID: string
   readonly mood: Mood | null
+  /** Fallback until the sidebar layout is measured. */
   readonly columns: number
   readonly pixelRows: number
   readonly activity: Activity
-  readonly panel?: PanelInput
 }
 
 function now(): number {
@@ -47,11 +46,20 @@ export function MoodSquare(props: MoodSquareProps) {
     }
   }
   const [tick, setTick] = createSignal(0)
+  const [measuredWidth, setMeasuredWidth] = createSignal<number>()
+  const dimensions = createMemo(() => sidebarDimensions(measuredWidth() ?? props.columns))
+  let boxNode:
+    | { getLayout: () => { readonly width: number }; onSizeChange?: (() => void) | undefined }
+    | undefined
+  const measure = (): void => {
+    const width = boxNode?.getLayout().width ?? 0
+    if (width > 0) setMeasuredWidth(width)
+  }
   let timer: ReturnType<typeof setInterval> | undefined
   let transition: Transition | undefined
   let initialized = false
   let last: Mood | null = null
-  const motionKey = `${props.sessionID}:${props.panel ? "panel" : "sidebar"}`
+  const motionKey = `${props.sessionID}:sidebar`
   let motion = motions.get(motionKey) ?? {
     phase: 0,
     tempo: activitySpeed(props.activity),
@@ -99,8 +107,7 @@ export function MoodSquare(props: MoodSquareProps) {
     if (next === last) return
 
     const at = now()
-    const columns = normalizeSize(props.columns)
-    const pixelRows = normalizeSize(props.pixelRows)
+    const { columns, pixelRows } = dimensions()
     const active = transition !== undefined && at - transition.start < MORPH_MS
     const snapshot = visualAt(
       last,
@@ -125,26 +132,15 @@ export function MoodSquare(props: MoodSquareProps) {
   })
 
   onCleanup(stop)
-
-  if (props.panel) {
-    plugin.keymap.layer(() => ({
-      commands: [
-        {
-          id: "llm-vibe.fullscreen",
-          title: "Toggle vibe fullscreen",
-          bind: "f",
-          run: () => props.panel?.toggleFullscreen(),
-        },
-      ],
-    }))
-  }
+  onCleanup(() => {
+    if (boxNode) boxNode.onSizeChange = undefined
+  })
 
   let text: TextRenderable | undefined
 
   const output = createMemo<RenderedSquare>(() => {
     tick()
-    const columns = normalizeSize(props.columns)
-    const pixelRows = normalizeSize(props.pixelRows)
+    const { columns, pixelRows } = dimensions()
     const visual = visualAt(
       props.mood,
       transition,
@@ -171,11 +167,15 @@ export function MoodSquare(props: MoodSquareProps) {
 
   return (
     <box
+      ref={(node) => {
+        boxNode = node
+        measure()
+        node.onSizeChange = measure
+      }}
       flexDirection="column"
       alignItems="center"
       justifyContent="center"
       width="100%"
-      flexGrow={props.panel ? 1 : 0}
     >
       <text
         ref={(node) => {

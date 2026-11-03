@@ -11,7 +11,7 @@
 - Server-part + TUI-part + RPC; MCP не нужен.
 - Состояние — только в памяти TUI. Никакого серверного хранилища, `ctx.storage`, `scan.ts`, чтения истории.
 - Один tool `vibe`; `clear` — необязательный флаг в нём.
-- Sidebar всегда; `/vibe` — большая панель.
+- Sidebar всегда; `/vibe` — toggle показа в сайдбаре.
 - По умолчанию слот сливается с фоном темы; слова внутри; stage-индикаторов нет.
 - Токенный overhead — измеряемая величина, а не «потом посмотрим».
 
@@ -26,7 +26,7 @@
 - [x] `src/render.ts`: half-block и текст внутри квадрата.
 - [x] `src/activity.ts`: live-активность сессии и множители темпа.
 - [x] `src/morph.ts`: безопасный morph field/palette и снимок для прерванных переходов.
-- [x] `src/tui.tsx`: RPC-подписка, in-memory state, sidebar, `/vibe` panel.
+- [x] `src/tui.tsx`: RPC-подписка, in-memory state, sidebar, `/vibe` toggle.
 - [x] `src/square.tsx`: компонент квадрата (если вынесен отдельно).
 - [x] Тесты на чистые функции и prompt hook.
 - [x] Локальная интеграционная проверка в OpenCode.
@@ -213,19 +213,16 @@ npm pack --dry-run
     - unsubscribe в cleanup.
   - `context.data.on("session.*", ...)` → `nextActivity` для thinking/writing/tool/waiting/idle;
   - `sidebar.content` slot (`prepend`):
-    - `<MoodSquare ... columns={24} pixelRows={18} activity={...} />`.
-  - `session.panel` slot:
-    - `<Show when={panel.name === "llm-vibe.mood"}>`;
-    - `panelDimensions(panel.width)` → adaptive columns/pixelRows;
-    - `<MoodSquare ... panel={panel} />`.
+    - `<Show when={visible()}>` вокруг `<MoodSquare ... />`;
+    - fallback `columns=24`, `pixelRows=18`.
   - `/vibe` command:
     - `slash: { name: "vibe" }`;
-    - toggle: `context.ui.panel.current()?.name === "llm-vibe.mood" ? close : open("llm-vibe.mood")`;
+    - toggle: `setVisible(value => !value)`;
     - `enabled` только в сессии.
-  - `f` keymap в panel для `toggleFullscreen`.
 - [x] `src/square.tsx`:
-  - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`, `panel?`;
+  - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`;
   - reactive mood из store;
+  - ширина измеряется у собственного `<box>` через `ref` + `onSizeChange`/`getLayout().width`;
   - если mood null → static dark empty (без таймера);
   - если mood есть → timer 12 FPS; фаза накапливается со скоростью активности и сглаживается (`motion.ts`);
   - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
@@ -233,11 +230,11 @@ npm pack --dry-run
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
   - morph при смене mood ~1 с; при interrupt стартует со снимка текущих field + palette;
-  - cleanup таймера.
+  - cleanup таймера и `onSizeChange`.
 - [x] Проверить:
   - sidebar не крадёт фокус;
-  - `/vibe` открывает/закрывает панель;
-  - panel width <= 0 не ломает размер;
+  - `/vibe` скрывает/показывает слот;
+  - измеренная ширина не ломает размер при 0;
   - no mood → слот сливается с фоном темы;
   - clear → изображение растворяется в фоне темы;
   - переключение сессий читает map;
@@ -245,10 +242,10 @@ npm pack --dry-run
 
 ### 6.2 Definition of Done
 
-- Оба renderer-а используют один store и один визуальный движок.
+- Sidebar использует один store и один визуальный движок.
 - Нет чтения истории, `scan.ts`.
 - Нет auto-open/auto-clear.
-- Таймеры чистятся.
+- Таймеры чистятся; `onSizeChange` cleanup.
 - `/vibe` работает в сессии и не падает вне её.
 
 ## 7. Phase 5 — Интеграция, замер, документация
@@ -268,10 +265,9 @@ npm pack --dry-run
 - [x] Попросить модель выполнить задачу с явной эмоциональной окраской; проверить:
   - tool call `vibe` в транскрипте;
   - sidebar обновился;
-  - слова внутри квадрата;
-  - `/vibe` открывает большую панель;
-  - повторный `/vibe` закрывает;
-  - `f` — fullscreen (если добавлено).
+  - слова внутри прямоугольника;
+  - `/vibe` скрывает слот;
+  - повторный `/vibe` возвращает последнее настроение.
 - [x] Попросить модель обновить mood несколько раз; проверить morph.
 - [x] Попросить очистить (`clear: true`); проверить растворение в фоне темы.
 - [x] Перезапустить TUI; проверить, что слот сливается с фоном до нового вызова.
@@ -342,7 +338,7 @@ llm-vibe/
 │   ├── activity.ts   # session activity -> tempo
 │   ├── motion.ts     # smoothed phase/tempo state
 │   ├── morph.ts      # field/palette morph + snapshots
-│   ├── dimensions.ts # sidebar/panel dimensions
+│   ├── dimensions.ts # adaptive sidebar dimensions
 │   ├── field.ts      # scalar field/animation
 │   ├── render.ts     # half-block + caption
 │   ├── tui.tsx       # TUI plugin, slots, command, subscription
@@ -370,11 +366,11 @@ llm-vibe/
 | prompt injection condition/duplicates | да | — |
 | tool emits updated/null | да | — |
 | field dimensions/finite/determinism | да | — |
-| panel dimensions / landscape aspect | да | да |
+| sidebar dimensions / landscape aspect | да | да |
 | render rows/caption/no control chars | да | — |
 | theme background / invisible empty state | да | да |
 | sidebar default/update | — | да |
-| `/vibe` open/close/fullscreen | — | да |
+| `/vibe` sidebar toggle | — | да |
 | multiple updates morph | — | да |
 | morph start/end/snapshot continuity | да | — |
 | rapid updates continue from rendered palette | — | да |
@@ -392,7 +388,7 @@ llm-vibe/
 - [x] `vibe` обновляет квадрат live.
 - [x] Несколько вызовов подряд показывают последнее состояние.
 - [x] `clear: true` растворяет изображение в фоне темы.
-- [x] `/vibe` открывает/закрывает большую панель.
+- [x] `/vibe` скрывает/показывает vibe в сайдбаре.
 - [x] Слова внутри квадрата; stage-индикаторов нет.
 - [x] Нет серверного хранилища/`ctx.storage`/`scan.ts`.
 - [x] TUI restart → слот сливается с фоном темы.
@@ -411,7 +407,7 @@ llm-vibe/
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
 | Медленный рендер | W 16–64, H 14–28, 12 FPS, static empty, cleanup |
 | Невалидные цвета/glyph | Sanitize/fallback, tool не падает |
-| Focus stealing | Sidebar не открывает панель; `/vibe` только по команде |
+| Focus stealing | Sidebar не открывает панель; `/vibe` только переключает видимость |
 | Remote server без server-part | Документировать установку обеих частей |
 | Version drift V2 API | Сверять с установленным OpenCode; docs V2 |
 
@@ -429,7 +425,7 @@ llm-vibe/
 Решено:
 
 - Пакет: `opencode-llm-vibe` без scope.
-- Sidebar: 24 колонки × 9 строк (24×18 пикселей), landscape.
+- Sidebar: измеренная ширина 16..64 колонок, высота 18..28 пикселей; fallback 24×18, landscape.
 - Plugin options в v1 нет.
 - `/vibe clear` для пользователя не делаем.
 - Prompt/tool активны во всех сессиях, включая subagent-сессии.

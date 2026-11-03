@@ -5,7 +5,7 @@ import type { Mood } from "./mood.js"
 export const DEFAULT_SIZE = 20
 
 /** Virtual margin around the blob field so it does not touch the slot edges. */
-const FIELD_MARGIN = 0.08
+const FIELD_MARGIN = 0.12
 
 export function normalizeSize(size: number): number {
   if (!Number.isFinite(size)) return DEFAULT_SIZE
