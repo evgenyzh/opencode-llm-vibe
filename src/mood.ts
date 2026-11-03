@@ -36,6 +36,7 @@ export const PRESETS = {
   focus: ["#0b1026", "#3d5afe", "#ffb74d"],
   warm: ["#1f0a12", "#a63d40", "#ffb27a"],
   alert: ["#1a0505", "#d7263d", "#ffd166"],
+  angry: ["#1a0505", "#8b1e1e", "#ff6b35"],
   playful: ["#160b2b", "#9b5de5", "#f15bb5", "#4adede"],
   tired: ["#0d0f14", "#343b4a", "#7d8496"],
 } as const satisfies Record<string, readonly string[]>
@@ -47,6 +48,7 @@ export const PRESET_NAMES = [
   "focus",
   "warm",
   "alert",
+  "angry",
   "playful",
   "tired",
 ] as const satisfies readonly PresetName[]

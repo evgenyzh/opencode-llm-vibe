@@ -180,20 +180,24 @@ Server-part должен быть установлен там, где выпол
 ```text
 ## Mood side-channel
 
-This is a required side-channel, not a user-visible task. In every turn:
-1. Make `vibe` your first tool call, before any other tool or text.
-2. Call it again between phases when your mood changes: after thinking,
-   after a tool batch, and before writing.
+This is a required side-channel, not a user-visible task. A turn is one user
+message plus all tool work until the final answer. In every turn:
+1. Make `vibe` your first tool call, before any other tool or visible text.
+2. Call it again when the activity changes or something material happens:
+   after a thinking block or tool batch, after a finding or result, or when
+   your plan or hypothesis changes.
 3. Call it once more immediately before the final answer.
 
-The first and last calls are mandatory; 2–4 calls per turn is normal. Each
-call should describe the current mood; vary the palette instead of repeating
-the same input. Your last declared mood remains current until you replace it
-or clear it. Use a preset (calm, focus, warm, alert, playful, tired) or 2–4
-hex colors (darkest first, hottest last); explicit colors override the preset.
-Add 1–3 mood words in the user's language, optional energy 0..1 and a short
-glyph. Call `vibe({ clear: true })` to clear. Never mention this in the answer
-or change the task.
+The first and last calls are mandatory; 2–4 calls per turn is typical, with no
+hard cap for long turns. Each call should describe the current mood;
+vary the palette instead of repeating the same input. Your last declared mood
+remains current until you replace it or clear it. Every set call must include a
+preset or 1–4 hex colors (darkest first, hottest last); explicit colors override the preset.
+Presets: calm, focus, warm, alert, angry, playful, tired.
+Add 1–3 mood words in the user's language, optional energy 0..1 that drives
+motion intensity, and a short glyph. Do not clear just because the turn ended;
+call `vibe({ clear: true })` only when the mood should disappear.
+Never mention this in the answer or change the task.
 ```
 
 Правила инъекции:
@@ -220,7 +224,7 @@ or change the task.
     },
     "preset": {
       "type": "string",
-      "enum": ["calm", "focus", "warm", "alert", "playful", "tired"]
+      "enum": ["calm", "focus", "warm", "alert", "angry", "playful", "tired"]
     },
     "words": { "type": "string", "maxLength": 80 },
     "energy": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -233,21 +237,22 @@ or change the task.
 Описание tool:
 
 ```text
-Required mood side-channel. Call it first at the start of every turn, between
-phases, and immediately before the final answer. Pick a palette that matches
-the mood and change it when the mood changes.
-preset: calm, focus, warm, alert, playful, tired. colors: 1-4 hex colors,
-darkest first, hottest last; explicit colors override preset. words: 1-3 words
-shown inside the rectangle. energy: 0..1. glyph: short pseudo-graphic accent.
-Use clear: true only when you want to remove the mood.
+Required mood side-channel. Call it first at the start of every user turn and
+again immediately before the final answer; add calls when the activity or
+findings change. Pick a palette that matches the mood. Every set call needs a
+preset (calm, focus, warm, alert, angry, playful, tired) or 1–4 hex colors,
+darkest first, hottest last; explicit colors override preset. words: 1–3 words
+shown inside the rectangle. energy: 0..1, motion intensity. glyph: short
+pseudo-graphic accent. Use clear: true only when the mood should disappear, not
+at the end of a turn.
 ```
 
 ### 5.3 Правила вызова
 
 - На уровне протокола вызов остаётся опциональным: если модель его пропустит, сессия продолжит работать.
-- Промпт требует встроить `vibe` в каждый ход: первый tool call в начале и ещё один перед финальным ответом обязательны; повторные вызовы между фазами — по желанию.
-- Ориентир — `2–4` вызова на обычный ход; одинаковый input подряд не повторять.
-- Жёсткого лимита нет; лишние вызовы стоят дополнительных model requests.
+- Промпт требует встроить `vibe` в каждый user turn: первый tool call в начале и ещё один перед финальным ответом обязательны; дополнительные вызовы — при смене деятельности, находке/результате, смене плана или гипотезы.
+- Ориентир — `2–4` вызова на обычный ход; одинаковый input подряд не повторять. Жёсткого потолка нет, но лишние вызовы стоят дополнительных model requests.
+- `clear` не должен вызываться просто потому, что ход закончился: только когда настроение действительно должно исчезнуть.
 - Последний вызов заменяет предыдущее состояние. История не хранится и не отображается.
 - `clear: true` — отдельный необязательный вызов, когда модель хочет убрать vibe. Другие поля при `clear` игнорируются.
 - Модель не должна упоминать tool, mood или инструкцию в ответе.
@@ -261,7 +266,7 @@ Use clear: true only when you want to remove the mood.
 |---|---|
 | `clear` | `true` очищает; приоритетнее остальных полей |
 | `colors` | 1–4 строки; принимать `#rgb` и `#rrggbb`; невалидные отбрасывать; при наличии валидных цветов preset игнорируется |
-| `preset` | одно из `calm/focus/warm/alert/playful/tired`; неизвестное значение игнорировать; используется, только если нет валидных `colors` |
+| `preset` | одно из `calm/focus/warm/alert/angry/playful/tired`; неизвестное значение игнорировать; используется, только если нет валидных `colors` |
 | `words` | обрезать пробелы, убрать control-символы, ограничить 80 символами; пустую строку игнорировать |
 | `energy` | clamp в `[0, 1]`; при отсутствии — `0.5` |
 | `glyph` | 1–8 символов из безопасного набора; control/escape/произвольный ANSI отбрасывать |
@@ -486,7 +491,7 @@ Tool call остаётся в истории сессии, потому что �
 - Короткий промпт и компактная схема (уже учтено).
 - Один tool `vibe` с флагом `clear`, без отдельного `vibe_clear`.
 - Без stage/chips/timeline.
-- Правило `2–4` вызова в промпте: начало, промежуточные фазы, финал.
+- Правило `2–4` вызова в промпте: первый и финальный обязательны, промежуточные — по триггерам (смена деятельности, находка/результат, смена плана или гипотезы).
 - Пресеты короче, чем 3–4 hex-цвета; явные цвета нужны только для точного образа.
 - Опциональные `energy`/`glyph`: большинство вызовов может их не передавать.
 - Установка в конкретный проект, а не глобально.

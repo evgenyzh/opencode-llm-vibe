@@ -76,6 +76,11 @@ describe("parseVibe", () => {
     }
   })
 
+  it("keeps the approved angry palette", () => {
+    expect(PRESET_NAMES).toContain("angry")
+    expect(PRESETS.angry).toEqual(["#1a0505", "#8b1e1e", "#ff6b35"])
+  })
+
   it("lets explicit colors override a preset", () => {
     const mood = setMood({ preset: "alert", colors: ["#123"] })
     expect(mood.colors).toEqual(["#112233"])

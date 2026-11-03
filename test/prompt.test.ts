@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { PRESET_NAMES } from "../src/mood.js"
 import {
   hasVibeTool,
   injectVibePrompt,
@@ -57,27 +58,44 @@ describe("injectVibePrompt", () => {
 })
 
 describe("prompt text", () => {
-  it("requires a call at the start, between phases, and before the answer", () => {
+  it("requires a call at the start, on phase changes, and before the answer", () => {
     expect(VIBE_PROMPT).toContain("required side-channel")
+    expect(VIBE_PROMPT).toContain("A turn is one user")
     expect(VIBE_PROMPT).toContain("first tool call")
-    expect(VIBE_PROMPT).toContain("between phases")
+    expect(VIBE_PROMPT).toContain("activity changes")
+    expect(VIBE_PROMPT).toContain("finding or result")
+    expect(VIBE_PROMPT).toContain("plan or hypothesis")
     expect(VIBE_PROMPT).toContain("immediately before the final")
     expect(VIBE_PROMPT).toContain("first and last calls are mandatory")
     expect(VIBE_PROMPT).toContain("2–4 calls per turn")
+    expect(VIBE_PROMPT).toContain("hard cap")
+    expect(VIBE_PROMPT).toContain("Every set call")
+    expect(VIBE_PROMPT).toContain("1–4 hex colors")
+    expect(VIBE_PROMPT).not.toContain("2–4 hex colors")
+    expect(VIBE_PROMPT).toContain("explicit colors override the preset")
+    expect(VIBE_PROMPT).toContain("clear just")
     expect(VIBE_PROMPT).toContain("clear: true")
     expect(VIBE_PROMPT).toContain("Never mention this")
     expect(VIBE_PROMPT).toContain("vary the palette")
-    expect(VIBE_PROMPT).toContain("explicit colors override the preset")
+  })
+
+  it("lists every preset in the prompt and tool description", () => {
+    for (const name of PRESET_NAMES) {
+      expect(VIBE_PROMPT).toContain(name)
+      expect(VIBE_TOOL_DESCRIPTION).toContain(name)
+    }
   })
 
   it("describes the tool fields and call timing compactly", () => {
     expect(VIBE_TOOL_DESCRIPTION).toContain("Required mood side-channel")
     expect(VIBE_TOOL_DESCRIPTION).toContain("first at the start")
-    expect(VIBE_TOOL_DESCRIPTION).toContain("between")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("findings change")
     expect(VIBE_TOOL_DESCRIPTION).toContain("before the final answer")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("not at the end of a turn")
     expect(VIBE_TOOL_DESCRIPTION).toContain("clear: true")
     expect(VIBE_TOOL_DESCRIPTION).toContain("colors")
     expect(VIBE_TOOL_DESCRIPTION).toContain("energy")
     expect(VIBE_TOOL_DESCRIPTION).toContain("preset")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("1–4 hex colors")
   })
 })

@@ -60,7 +60,9 @@ The model may call the tool whenever it wants, with a preset or explicit colors:
 }
 ```
 
-- `preset` — `calm`, `focus`, `warm`, `alert`, `playful`, or `tired`.
+- `preset` — `calm`, `focus`, `warm`, `alert`, `angry`, `playful`, or `tired`.
+  `angry` is a blood-red → orange palette; pair it with higher `energy` for a
+  more turbulent field.
 - `colors` — 1–4 hex colors, darkest first, hottest last. Explicit colors
   override a preset.
 - `words` — short mood words shown inside the lower part of the rectangle.
@@ -71,11 +73,11 @@ The prompt asks the model to change the palette when the mood changes, so
 different vibes do not collapse into the same blue/orange gradient.
 
 The prompt makes the tool part of every turn: the first tool call should be
-`vibe`, with updates between phases and immediately before the final answer
-(2–4 calls is the normal range; the first and last are mandatory). The tool is
-registered as a direct tool (`codemode: false`), so the model can call it
-without routing through `execute`. The last call wins; there is no history. To
-remove the mood, the model calls:
+`vibe`, with updates when the activity or findings change and one immediately
+before the final answer (2–4 calls is typical, with no hard cap; the first and
+last are mandatory). The tool is registered as a direct tool (`codemode:
+false`), so the model can call it without routing through `execute`. The last
+call wins; there is no history. To remove the mood, the model calls:
 
 ```json
 { "clear": true }
@@ -132,8 +134,9 @@ model.
 A direct `vibe` call adds roughly 30–50 tokens of JSON plus `ok`, and causes one
 extra model request that re-reads the current context (~300–400 tokens plus
 context). The tool call also stays in the session history and adds roughly
-30–60 tokens per later request. The prompt asks for 2–4 calls on a normal turn:
-first, between phases, and before the final answer; there is no hard limit.
+30–60 tokens per later request. The prompt asks for at least two calls on a
+normal turn (first and before the final answer), with more when the activity or
+findings change; 2–4 is typical and there is no hard limit.
 
 See [`SPEC.md`](./SPEC.md) §9 for the full budget and caveats.
 

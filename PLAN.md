@@ -87,7 +87,7 @@ npm pack --dry-run
 
 - [x] `src/mood.ts`:
   - типы `Mood`, `VibeInput`, `VIBE_INPUT_SCHEMA` (JSON Schema для tool input);
-  - `PRESETS` (`calm/focus/warm/alert/playful/tired`) и `PRESET_NAMES`;
+  - `PRESETS` (`calm/focus/warm/alert/angry/playful/tired`) и `PRESET_NAMES`;
   - `parseVibe(input: unknown): VibeInput`; explicit `colors` важнее `preset`;
   - `normalizeMood`;
   - `parseColor` (`#rgb`, `#rrggbb`), `toHex`, `darken`, `mix`, `buildPalette`;
