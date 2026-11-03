@@ -76,7 +76,7 @@ history.
 - Sidebar: fixed 20×20 pixel square (20 columns × 10 terminal rows).
 - Panel: responsive even size from 12 to 32 pixels, centered.
 - The image is a moving gradient/blob field with low-frequency noise.
-- Words are rendered inside a dark band at the bottom of the square.
+- Words are rendered inside a dark band around the text at the bottom of the square; image pixels remain on both sides.
 - With no mood, the square is a static dark vignette.
 
 The renderer uses half blocks (`▀`): `fg` is the top pixel and `bg` is the bottom

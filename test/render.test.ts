@@ -25,12 +25,15 @@ describe("renderSquare", () => {
     expect(chunkText(square)).toBe(square.rows.join("\n"))
   })
 
-  it("puts words inside the bottom of the square", () => {
+  it("puts words inside the bottom of the square with image pixels beside them", () => {
     const square = renderSquare(mood, 20, 0)
+    const bottom = square.rows.at(-1) ?? ""
     expect(square.rows).toHaveLength(10)
-    expect(square.rows.at(-1)).toContain("спокойствие")
-    expect(square.rows.at(-1)).toContain("✦")
-    expect(square.rows.at(-1)).not.toContain("▀")
+    expect(bottom).toContain("спокойствие")
+    expect(bottom).toContain("✦")
+    expect(bottom.startsWith("▀")).toBe(true)
+    expect(bottom.endsWith("▀")).toBe(true)
+    expect(chunkText(square)).toBe(square.rows.join("\n"))
   })
 
   it("keeps every row exactly the square width", () => {

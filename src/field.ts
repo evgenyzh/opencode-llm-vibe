@@ -116,6 +116,10 @@ export function sampleField(mood: Mood | null, time: number, size: number): Floa
       const edge = 1 - smoothstep(0.72, 1.12, Math.max(Math.abs(nxCentered), Math.abs(nyCentered)))
       value *= 0.58 + edge * 0.42
 
+      // Push the brightest core into the hot end of the palette; without this
+      // the last color often stays almost invisible.
+      value = smoothstep(0.12, 0.85, value)
+
       field[y * n + x] = clamp(value, 0, 1)
     }
   }

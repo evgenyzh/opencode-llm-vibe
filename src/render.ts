@@ -150,12 +150,40 @@ export function renderField(
     lines.forEach((line, index) => {
       const width = Math.min(n, charCount(line))
       const left = Math.max(0, Math.floor((n - width) / 2))
-      const right = Math.max(0, n - left - width)
-      const plain = `${" ".repeat(left)}${line}${" ".repeat(right)}`
-      if (left > 0) appendChunk(bg(caption.bandColor)(" ".repeat(left)))
-      if (width > 0) appendChunk(bg(caption.bandColor)(fg(caption.textColor)(line)))
-      if (right > 0) appendChunk(bg(caption.bandColor)(" ".repeat(right)))
-      rows.push(plain)
+      const bandStart = Math.max(0, left - 1)
+      const bandEnd = Math.min(n, left + width + 1)
+      const pixelRow = pixelRows + index
+      const topOffset = pixelRow * 2 * n
+      const bottomOffset = (pixelRow * 2 + 1) * n
+      const plain: string[] = []
+
+      for (let column = 0; column < n; column += 1) {
+        if (column < bandStart || column >= bandEnd) {
+          const top = paletteColor(palette, field[topOffset + column] ?? 0)
+          const bottom = paletteColor(palette, field[bottomOffset + column] ?? 0)
+          appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
+          plain.push("▀")
+          continue
+        }
+
+        const leftPadding = left - bandStart
+        if (leftPadding > 0) {
+          appendChunk(bg(caption.bandColor)(" ".repeat(leftPadding)))
+          plain.push(" ".repeat(leftPadding))
+        }
+        if (width > 0) {
+          appendChunk(bg(caption.bandColor)(fg(caption.textColor)(line)))
+          plain.push(line)
+        }
+        const rightPadding = bandEnd - (left + width)
+        if (rightPadding > 0) {
+          appendChunk(bg(caption.bandColor)(" ".repeat(rightPadding)))
+          plain.push(" ".repeat(rightPadding))
+        }
+        column = bandEnd - 1
+      }
+
+      rows.push(plain.join(""))
       if (pixelRows + index < rowCount - 1) appendNewline()
     })
   }
