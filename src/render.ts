@@ -9,9 +9,11 @@ import {
   lighten,
   mixRgb,
   paletteColor,
+  PALETTE_SIZE,
   rgbToHex,
   type Mood,
   type Palette,
+  type Rgb,
 } from "./mood.js"
 
 export interface Caption {
@@ -20,17 +22,31 @@ export interface Caption {
   readonly bandColor: string
 }
 
+export interface CaptionColors {
+  readonly background: Rgb
+  readonly text: Rgb
+}
+
 export interface RenderedSquare {
   readonly text: StyledText
   /** Plain rows for tests/debugging; one string per terminal row. */
   readonly rows: readonly string[]
 }
 
-export function paletteFor(mood: Mood | null): Palette {
-  return mood === null ? EMPTY_PALETTE : buildPalette(mood.colors)
+function solidPalette(color: Rgb): Palette {
+  return Array.from({ length: PALETTE_SIZE }, () => color)
 }
 
-export function captionFor(mood: Mood | null, columns: number): Caption | undefined {
+export function paletteFor(mood: Mood | null, background?: Rgb): Palette {
+  if (mood === null) return background ? solidPalette(background) : EMPTY_PALETTE
+  return buildPalette(mood.colors)
+}
+
+export function captionFor(
+  mood: Mood | null,
+  columns: number,
+  colors?: CaptionColors,
+): Caption | undefined {
   if (mood === null) return undefined
   const text = [mood.glyph, mood.words].filter((part): part is string => Boolean(part)).join(" ").trim()
   if (!text) return undefined
@@ -42,8 +58,8 @@ export function captionFor(mood: Mood | null, columns: number): Caption | undefi
   const palette = paletteFor(mood)
   const first = palette[0] ?? { r: 4, g: 5, b: 7 }
   const last = palette.at(-1) ?? first
-  const band = darken(mixRgb(first, last, 0.18), 0.45)
-  const textColor = lighten(last, 0.72)
+  const band = colors?.background ?? darken(mixRgb(first, last, 0.18), 0.45)
+  const textColor = colors?.text ?? lighten(last, 0.72)
 
   return {
     lines,
@@ -111,6 +127,21 @@ function wrapCaption(text: string, width: number, maxLines: number): string[] {
   return lines.slice(0, maxLines)
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+/** Keeps the empty part of the field on the theme background. */
+function fadeToBackground(value: number): number {
+  const t = clamp((value - 0.04) / (0.3 - 0.04), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
+function pixelColor(palette: Palette, value: number, background?: Rgb): Rgb {
+  const color = paletteColor(palette, value)
+  return background ? mixRgb(background, color, fadeToBackground(value)) : color
+}
+
 /** Renders a field as `▀` cells. Caption rows replace the bottom pixel rows. */
 export function renderField(
   field: Float32Array,
@@ -118,6 +149,7 @@ export function renderField(
   pixelRows: number,
   palette: Palette,
   caption?: Caption,
+  background?: Rgb,
 ): RenderedSquare {
   const w = normalizeSize(columns)
   const h = normalizeSize(pixelRows)
@@ -140,8 +172,8 @@ export function renderField(
     const topOffset = row * 2 * w
     const bottomOffset = (row * 2 + 1) * w
     for (let column = 0; column < w; column += 1) {
-      const top = paletteColor(palette, field[topOffset + column] ?? 0)
-      const bottom = paletteColor(palette, field[bottomOffset + column] ?? 0)
+      const top = pixelColor(palette, field[topOffset + column] ?? 0, background)
+      const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background)
       appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
     }
     rows.push("▀".repeat(w))
@@ -161,8 +193,8 @@ export function renderField(
 
       for (let column = 0; column < w; column += 1) {
         if (column < bandStart || column >= bandEnd) {
-          const top = paletteColor(palette, field[topOffset + column] ?? 0)
-          const bottom = paletteColor(palette, field[bottomOffset + column] ?? 0)
+          const top = pixelColor(palette, field[topOffset + column] ?? 0, background)
+          const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background)
           appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
           plain.push("▀")
           continue
@@ -199,8 +231,16 @@ export function renderSquare(
   columns: number,
   pixelRows: number,
   time: number,
+  background?: Rgb,
 ): RenderedSquare {
   const w = normalizeSize(columns)
   const h = normalizeSize(pixelRows)
-  return renderField(sampleField(mood, time, w, h), w, h, paletteFor(mood), captionFor(mood, w))
+  return renderField(
+    sampleField(mood, time, w, h),
+    w,
+    h,
+    paletteFor(mood, background),
+    captionFor(mood, w),
+    background,
+  )
 }

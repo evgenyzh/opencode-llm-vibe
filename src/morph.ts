@@ -1,7 +1,7 @@
 /** Smooth field and palette morphs between mood states. */
 
 import { blendFields, sampleField } from "./field.js"
-import { blendPalettes, type Mood, type Palette } from "./mood.js"
+import { blendPalettes, type Mood, type Palette, type Rgb } from "./mood.js"
 import { paletteFor } from "./render.js"
 
 export const MORPH_MS = 1000
@@ -41,11 +41,12 @@ export function visualAt(
   columns: number,
   pixelRows: number,
   at: number,
+  background?: Rgb,
 ): Visual {
   if (!transition) {
     return {
       field: sampleField(mood, phase, columns, pixelRows),
-      palette: paletteFor(mood),
+      palette: paletteFor(mood, background),
       mood,
     }
   }
@@ -54,7 +55,7 @@ export function visualAt(
   if (raw >= 1) {
     return {
       field: sampleField(transition.to, phase, columns, pixelRows),
-      palette: paletteFor(transition.to),
+      palette: paletteFor(transition.to, background),
       mood: transition.to,
     }
   }
@@ -63,7 +64,7 @@ export function visualAt(
   const source = transition.fromField ?? sampleField(transition.fromMood, phase, columns, pixelRows)
   return {
     field: blendFields(source, sampleField(transition.to, phase, columns, pixelRows), progress),
-    palette: blendPalettes(transition.fromPalette, paletteFor(transition.to), progress),
+    palette: blendPalettes(transition.fromPalette, paletteFor(transition.to, background), progress),
     mood: progress < 0.45 ? transition.fromMood : transition.to,
   }
 }

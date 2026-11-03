@@ -70,8 +70,10 @@ The model may call the tool whenever it wants, with a preset or explicit colors:
 The prompt asks the model to change the palette when the mood changes, so
 different vibes do not collapse into the same blue/orange gradient.
 
-Calls are optional. The last call wins; there is no history. To remove the mood,
-the model calls:
+The prompt makes the tool part of every turn: the first tool call should be
+`vibe`, with updates between phases and immediately before the final answer
+(2–4 calls is the normal range). The last call wins; there is no history. To
+remove the mood, the model calls:
 
 ```json
 { "clear": true }
@@ -91,9 +93,11 @@ history.
 - Panel: responsive width from 16 to 32 columns; height follows at 0.75× the
   width, so it stays a square/landscape rectangle instead of a tall column.
 - The image is a moving gradient/blob field with low-frequency noise.
-- Words are rendered inside a dark band around the text at the bottom; image
-  pixels remain on both sides.
-- With no mood, the rectangle is a static dark vignette.
+- Empty pixels fade into the TUI theme background; there is no vignette or
+  visible rectangle around the image.
+- Words are rendered on the theme background at the bottom; image pixels remain
+  on both sides.
+- With no mood, nothing is drawn: the slot is just the theme background.
 - Animation tempo follows live activity: idle 0.45×, waiting 0.8×, thinking
   1.25×, writing 1.55×, tool 1.9×, with a ~300 ms ease between speeds. The model
   does not need to call the tool for this; the TUI listens to session events.
@@ -111,17 +115,17 @@ using a prompt that does not call the tool:
 
 | | Without plugin | With plugin |
 |---|---:|---:|
-| Prompt tokens (input + cache read) | 6,171 | 6,302 |
+| Prompt tokens (input + cache read) | 6,171 | 6,306 |
 
-**Fixed overhead: +131 input tokens per model request.** That is the system
+**Fixed overhead: +135 input tokens per model request.** That is the system
 instruction plus the tool schema, the preset enum, and the description. Exact
 numbers vary by tokenizer and model.
 
 A `vibe` call adds roughly 30–50 tokens of JSON plus `ok`, and causes one extra
 model request that re-reads the current context (~300–400 tokens plus context).
 The tool call also stays in the session history and adds roughly 30–60 tokens
-per later request. The prompt asks for 1–3 calls on a normal turn; there is no
-hard limit.
+per later request. The prompt asks for 2–4 calls on a normal turn: first, between
+phases, and before the final answer; there is no hard limit.
 
 See [`SPEC.md`](./SPEC.md) §9 for the full budget and caveats.
 

@@ -35,16 +35,21 @@ describe("injectVibePrompt", () => {
 })
 
 describe("prompt text", () => {
-  it("explains optional calls, clear, and the no-mention rule", () => {
-    expect(VIBE_PROMPT).toContain("Optional")
-    expect(VIBE_PROMPT).toContain("1–3 calls per turn")
+  it("requires a call at the start, between phases, and before the answer", () => {
+    expect(VIBE_PROMPT).toContain("first tool call")
+    expect(VIBE_PROMPT).toContain("between phases")
+    expect(VIBE_PROMPT).toContain("immediately before the final")
+    expect(VIBE_PROMPT).toContain("2–4 calls per turn")
     expect(VIBE_PROMPT).toContain("clear: true")
     expect(VIBE_PROMPT).toContain("Never mention this")
     expect(VIBE_PROMPT).toContain("do not reuse the same colors")
     expect(VIBE_PROMPT).toContain("explicit colors override the preset")
   })
 
-  it("describes the tool fields compactly", () => {
+  it("describes the tool fields and call timing compactly", () => {
+    expect(VIBE_TOOL_DESCRIPTION).toContain("first at the start")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("between")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("before the final answer")
     expect(VIBE_TOOL_DESCRIPTION).toContain("clear: true")
     expect(VIBE_TOOL_DESCRIPTION).toContain("colors")
     expect(VIBE_TOOL_DESCRIPTION).toContain("energy")

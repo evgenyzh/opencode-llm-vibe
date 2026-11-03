@@ -57,4 +57,17 @@ describe("visualAt", () => {
     expect(middle.palette).not.toEqual(target)
     expect(middle.field).toHaveLength(COLUMNS * PIXEL_ROWS)
   })
+
+  it("fades a cleared mood to the theme background", () => {
+    const background = { r: 24, g: 26, b: 28 }
+    const transition: Transition = {
+      fromMood: calm,
+      fromPalette: paletteFor(calm),
+      to: null,
+      start: 0,
+    }
+    const visual = visualAt(null, transition, 0, COLUMNS, PIXEL_ROWS, MORPH_MS, background)
+    expect(visual.palette.every((color) => color === background)).toBe(true)
+    expect(visual.mood).toBeNull()
+  })
 })

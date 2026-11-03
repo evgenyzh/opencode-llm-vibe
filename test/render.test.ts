@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { captionFor, renderField, renderSquare } from "../src/render.js"
+import { captionFor, paletteFor, renderField, renderSquare } from "../src/render.js"
 import { buildPalette, EMPTY_PALETTE, type Mood } from "../src/mood.js"
 
 const COLUMNS = 24
@@ -109,5 +109,36 @@ describe("renderField", () => {
     expect(square.rows).toHaveLength(ROWS)
     expect(square.rows.at(-1)).toContain("hi")
     expect(square.rows.at(-2)).toBe("▀".repeat(COLUMNS))
+  })
+
+  it("fades empty pixels into the supplied theme background", () => {
+    const background = { r: 24, g: 26, b: 28 }
+    const square = renderField(
+      new Float32Array(COLUMNS * PIXEL_ROWS),
+      COLUMNS,
+      PIXEL_ROWS,
+      buildPalette(["#000"]),
+      undefined,
+      background,
+    )
+    const chunk = square.text.chunks[0]
+    expect(chunk?.fg?.toInts().slice(0, 3)).toEqual([24, 26, 28])
+    expect(chunk?.bg?.toInts().slice(0, 3)).toEqual([24, 26, 28])
+  })
+
+  it("uses the theme background for the empty state palette", () => {
+    const background = { r: 24, g: 26, b: 28 }
+    const palette = paletteFor(null, background)
+    expect(palette).toHaveLength(EMPTY_PALETTE.length)
+    expect(palette.every((color) => color === background)).toBe(true)
+  })
+
+  it("accepts theme colors for the caption band and text", () => {
+    const caption = captionFor(mood, COLUMNS, {
+      background: { r: 20, g: 20, b: 20 },
+      text: { r: 240, g: 240, b: 240 },
+    })
+    expect(caption?.bandColor).toBe("#141414")
+    expect(caption?.textColor).toBe("#f0f0f0")
   })
 })

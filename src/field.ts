@@ -117,11 +117,6 @@ export function sampleField(
       value = value * 0.86 + (noise - 0.5) * noiseAmplitude
       value = clamp(value * 1.18 + 0.02, 0, 1)
 
-      const nxCentered = nx * 2 - 1
-      const nyCentered = ny * 2 - 1
-      const edge = 1 - smoothstep(0.72, 1.12, Math.max(Math.abs(nxCentered), Math.abs(nyCentered)))
-      value *= 0.58 + edge * 0.42
-
       // Push the brightest core into the hot end of the palette; without this
       // the last color often stays almost invisible.
       value = smoothstep(0.12, 0.85, value)

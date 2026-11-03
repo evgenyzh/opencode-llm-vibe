@@ -12,7 +12,7 @@
 - Состояние — только в памяти TUI. Никакого серверного хранилища, `ctx.storage`, `scan.ts`, чтения истории.
 - Один tool `vibe`; `clear` — необязательный флаг в нём.
 - Sidebar всегда; `/vibe` — большая панель.
-- По умолчанию тёмный пустой квадрат; слова внутри; stage-индикаторов нет.
+- По умолчанию слот сливается с фоном темы; слова внутри; stage-индикаторов нет.
 - Токенный overhead — измеряемая величина, а не «потом посмотрим».
 
 ## 1. Deliverables
@@ -171,13 +171,13 @@ npm pack --dry-run
   - low-frequency value noise (hash + bilinear);
   - `energy` → скорость/амплитуда;
   - `smoothstep`, clamp 0..1;
-  - `clear`/null → тёмное пустое поле.
+  - `clear`/null → поле, низкие значения которого уходят в фон темы.
 - [x] `src/render.ts`:
   - `renderRows(field, size, mood): StyledText`;
   - half-block `▀` с `fg`/`bg`;
   - caption внутри нижних 1–2 строк;
   - word wrap/truncate, glyph accent;
-  - тёмная полоса под текст;
+  - полоса под текст цвета фона темы, текст — цвета текста темы;
   - безопасные hex-цвета; никаких control-символов;
   - `selectable={false}`, `wrapMode="none"`.
 - [x] Тесты `test/field.test.ts`:
@@ -229,6 +229,7 @@ npm pack --dry-run
   - если mood null → static dark empty (без таймера);
   - если mood есть → timer 12 FPS; фаза накапливается со скоростью активности и сглаживается (`motion.ts`);
   - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
+  - фон/текст брать из `context.theme`; low values field смешивать с фоном;
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
   - morph при смене mood ~1 с; при interrupt стартует со снимка текущих field + palette;
@@ -237,10 +238,10 @@ npm pack --dry-run
   - sidebar не крадёт фокус;
   - `/vibe` открывает/закрывает панель;
   - panel width <= 0 не ломает размер;
-  - no mood → тёмный квадрат;
-  - clear → тёмный квадрат;
+  - no mood → слот сливается с фоном темы;
+  - clear → изображение растворяется в фоне темы;
   - переключение сессий читает map;
-  - TUI restart → пусто.
+  - TUI restart → слот сливается с фоном темы.
 
 ### 6.2 Definition of Done
 
@@ -263,7 +264,7 @@ npm pack --dry-run
   }
   ```
 - [x] Запустить OpenCode, открыть сессию.
-- [x] Проверить sidebar: тёмный пустой квадрат.
+- [x] Проверить sidebar: слот сливается с фоном темы.
 - [x] Попросить модель выполнить задачу с явной эмоциональной окраской; проверить:
   - tool call `vibe` в транскрипте;
   - sidebar обновился;
@@ -272,8 +273,8 @@ npm pack --dry-run
   - повторный `/vibe` закрывает;
   - `f` — fullscreen (если добавлено).
 - [x] Попросить модель обновить mood несколько раз; проверить morph.
-- [x] Попросить очистить (`clear: true`); проверить тёмный квадрат.
-- [x] Перезапустить TUI; проверить, что квадрат пустой до нового вызова.
+- [x] Попросить очистить (`clear: true`); проверить растворение в фоне темы.
+- [x] Перезапустить TUI; проверить, что слот сливается с фоном до нового вызова.
 - [x] Проверить логи:
   `~/.local/share/opencode/log/opencode.log`, фильтр `role=cli`/`role=server`.
 
@@ -291,7 +292,7 @@ npm pack --dry-run
 5. Записать результат в `README.md`/`SPEC.md` (раздел «Токенный бюджет»).
 6. Проверить, что reasoning-модель не даёт неожиданно большой overhead; при необходимости уменьшить промпт/схему.
 
-**Результат:** 3 прогона с плагином и 3 без, DeepSeek V4 Flash (Bifrost), промпт без вызова tool. Суммарный prompt: 6,302 против 6,171 → **+131 input token** фиксированного overhead. Записано в `SPEC.md` §9 и `README.md`.
+**Результат:** 3 прогона с плагином и 3 без, DeepSeek V4 Flash (Bifrost), промпт без вызова tool. Суммарный prompt: 6,306 против 6,171 → **+135 input token** фиксированного overhead. Записано в `SPEC.md` §9 и `README.md`.
 
 ### 7.3 Документация
 
@@ -368,6 +369,7 @@ llm-vibe/
 | tool emits updated/null | да | — |
 | field dimensions/finite/determinism | да | — |
 | render rows/caption/no control chars | да | — |
+| theme background / invisible empty state | да | да |
 | sidebar default/update | — | да |
 | `/vibe` open/close/fullscreen | — | да |
 | multiple updates morph | — | да |
@@ -383,14 +385,14 @@ llm-vibe/
 
 - [x] `npm run check` проходит.
 - [x] Пакет собирается в `dist` и проходит `npm pack --dry-run`.
-- [x] Sidebar всегда показывает тёмный пустой квадрат без mood.
+- [x] Sidebar без mood сливается с фоном темы (видимого прямоугольника нет).
 - [x] `vibe` обновляет квадрат live.
 - [x] Несколько вызовов подряд показывают последнее состояние.
-- [x] `clear: true` очищает.
+- [x] `clear: true` растворяет изображение в фоне темы.
 - [x] `/vibe` открывает/закрывает большую панель.
 - [x] Слова внутри квадрата; stage-индикаторов нет.
 - [x] Нет серверного хранилища/`ctx.storage`/`scan.ts`.
-- [x] TUI restart → пустой квадрат.
+- [x] TUI restart → слот сливается с фоном темы.
 - [x] Tool result `ok`, без эха mood.
 - [x] Token overhead замерен и записан.
 - [x] `AGENTS.md`/`README.md` актуальны.
@@ -399,9 +401,9 @@ llm-vibe/
 
 | Риск | Mitigation |
 |---|---|
-| Модель игнорирует optional tool | Короткий явный промпт, описание tool, 1–3 guidance; пустой default не выглядит ошибкой |
+| Модель игнорирует optional tool | Жёсткий промпт: первый вызов, промежуточные фазы, финал; описание tool; пустой default не выглядит ошибкой |
 | Слишком большой token overhead | Компактная схема, один tool, без stages, замер, project-local install |
-| Tool call history растёт | Мягкое 1–3, нет жёсткого лимита; compaction; замер |
+| Tool call history растёт | 2–4 ориентир, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
 | Медленный рендер | W 24–32, H 18–24, 12 FPS, static empty, cleanup |
@@ -428,7 +430,7 @@ llm-vibe/
 - Plugin options в v1 нет.
 - `/vibe clear` для пользователя не делаем.
 - Prompt/tool активны во всех сессиях, включая subagent-сессии.
-- Токенный overhead замерен: +131 input token на request.
+- Токенный overhead замерен: +135 input token на request.
 - Достаточно раздела в README/SPEC, отдельный `TOKENS.md` не нужен.
 
 Future:
