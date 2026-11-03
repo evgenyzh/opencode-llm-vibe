@@ -224,7 +224,7 @@ npm pack --dry-run
   - props: `sessionID`, `mood`, `columns`, `pixelRows`, `activity`, `panel?`;
   - reactive mood из store;
   - если mood null → static dark empty (без таймера);
-  - если mood есть → timer 10 FPS; фаза накапливается со скоростью активности;
+  - если mood есть → timer 12 FPS; фаза накапливается со скоростью активности и сглаживается (`motion.ts`);
   - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
@@ -336,6 +336,7 @@ llm-vibe/
 │   ├── mood.ts       # types/parser/palette
 │   ├── prompt.ts     # prompt + tool description
 │   ├── activity.ts   # session activity -> tempo
+│   ├── motion.ts     # smoothed phase/tempo state
 │   ├── field.ts      # scalar field/animation
 │   ├── render.ts     # half-block + caption
 │   ├── tui.tsx       # TUI plugin, slots, command, subscription
@@ -345,6 +346,7 @@ llm-vibe/
 │   ├── prompt.test.ts
 │   ├── tool.test.ts
 │   ├── activity.test.ts
+│   ├── motion.test.ts
 │   ├── field.test.ts
 │   └── render.test.ts
 └── .github/workflows/ci.yml
@@ -364,6 +366,7 @@ llm-vibe/
 | `/vibe` open/close/fullscreen | — | да |
 | multiple updates morph | — | да |
 | activity tempo idle/thinking/tool/writing | да | да |
+| smooth tempo / continuous phase | да | да |
 | clear → empty | — | да |
 | TUI restart → empty | — | да |
 | token overhead | — | да |
@@ -393,7 +396,7 @@ llm-vibe/
 | Tool call history растёт | Мягкое 0–2, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
-| Медленный рендер | W 24–32, H 18–24, 10 FPS, static empty, cleanup |
+| Медленный рендер | W 24–32, H 18–24, 12 FPS, static empty, cleanup |
 | Невалидные цвета/glyph | Sanitize/fallback, tool не падает |
 | Focus stealing | Sidebar не открывает панель; `/vibe` только по команде |
 | Remote server без server-part | Документировать установку обеих частей |

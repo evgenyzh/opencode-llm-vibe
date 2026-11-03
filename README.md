@@ -80,9 +80,9 @@ history.
 - Words are rendered inside a dark band around the text at the bottom; image
   pixels remain on both sides.
 - With no mood, the rectangle is a static dark vignette.
-- Animation tempo follows live activity: idle 0.35×, waiting 0.8×, thinking
-  1.5×, writing 1.9×, tool 2.4×. The model does not need to call the tool for
-  this; the TUI listens to session events.
+- Animation tempo follows live activity: idle 0.45×, waiting 0.8×, thinking
+  1.25×, writing 1.55×, tool 1.9×, with a ~300 ms ease between speeds. The model
+  does not need to call the tool for this; the TUI listens to session events.
 
 The renderer uses half blocks (`▀`): `fg` is the top pixel and `bg` is the bottom
 pixel, with 24-bit color.
@@ -129,7 +129,7 @@ animated rectangle
 ```
 
 - Server part: `src/index.ts`, `src/tool.ts`, `src/prompt.ts`, `src/rpc.ts`.
-- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/field.ts`, `src/render.ts`.
+- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/activity.ts`, `src/motion.ts`, `src/field.ts`, `src/render.ts`.
 - Shared protocol: `src/mood.ts`, `src/rpc.ts`.
 
 There is no server-side storage, database, file cache, `ctx.storage`, history

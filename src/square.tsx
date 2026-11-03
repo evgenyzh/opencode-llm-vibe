@@ -7,6 +7,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { activitySpeed, type Activity } from "./activity.js"
 import { blendFields, normalizeSize, sampleField } from "./field.js"
 import { blendPalettes, type Mood } from "./mood.js"
+import { advanceMotion, type MotionState } from "./motion.js"
 import {
   captionFor,
   paletteFor,
@@ -15,9 +16,12 @@ import {
   type RenderedSquare,
 } from "./render.js"
 
-const FPS = 10
+const FPS = 12
 const FRAME_MS = 1000 / FPS
 const MORPH_MS = 700
+
+/** Motion survives host re-renders; sidebar and panel animate independently. */
+const motions = new Map<string, MotionState>()
 
 export const SIDEBAR_COLUMNS = 24
 export const SIDEBAR_PIXEL_ROWS = 18
@@ -70,7 +74,12 @@ export function MoodSquare(props: MoodSquareProps) {
   let transition: Transition | undefined
   let initialized = false
   let last: Mood | null = null
-  let phase = 0
+  const motionKey = `${props.sessionID}:${props.panel ? "panel" : "sidebar"}`
+  let motion = motions.get(motionKey) ?? {
+    phase: 0,
+    tempo: activitySpeed(props.activity),
+  }
+  motions.set(motionKey, motion)
   let lastFrame = now()
 
   const start = (): void => {
@@ -91,7 +100,8 @@ export function MoodSquare(props: MoodSquareProps) {
     const currentTime = now()
     const elapsed = Math.min(0.25, (currentTime - lastFrame) / 1000)
     lastFrame = currentTime
-    phase += elapsed * activitySpeed(props.activity)
+    motion = advanceMotion(motion, activitySpeed(props.activity), elapsed)
+    motions.set(motionKey, motion)
 
     const current = transition
     if (current && currentTime - current.start >= MORPH_MS) {
@@ -140,15 +150,15 @@ export function MoodSquare(props: MoodSquareProps) {
     const pixelRows = normalizeSize(props.pixelRows)
     const current = transition
 
-    if (!current) return renderSquare(props.mood, columns, pixelRows, phase)
+    if (!current) return renderSquare(props.mood, columns, pixelRows, motion.phase)
 
     const raw = clamp((now() - current.start) / MORPH_MS, 0, 1)
-    if (raw >= 1) return renderSquare(props.mood, columns, pixelRows, phase)
+    if (raw >= 1) return renderSquare(props.mood, columns, pixelRows, motion.phase)
 
     const progress = ease(raw)
     const field = blendFields(
-      sampleField(current.from, phase, columns, pixelRows),
-      sampleField(current.to, phase, columns, pixelRows),
+      sampleField(current.from, motion.phase, columns, pixelRows),
+      sampleField(current.to, motion.phase, columns, pixelRows),
       progress,
     )
     const palette = blendPalettes(paletteFor(current.from), paletteFor(current.to), progress)
