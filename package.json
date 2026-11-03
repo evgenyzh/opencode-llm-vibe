@@ -24,6 +24,9 @@
     "node": ">=22",
     "opencode": ">=2.2"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

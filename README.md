@@ -6,10 +6,22 @@ tool and renders it as an animated pseudo-graphic rectangle in the TUI.
 The rectangle lives in the sidebar. `/vibe` toggles it on or off; with no mood
 the slot blends into the theme background.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/evgenyzh/opencode-llm-vibe/main/assets/llm-vibe.png" alt="llm-vibe sidebar with a deep focus mood" width="300">
+</p>
+
 ## Install
 
-The package is loaded through `opencode.json(c)` because both the server and TUI
-parts are required:
+Install the package globally:
+
+```sh
+opencode plugin add opencode-llm-vibe
+```
+
+One entry loads both the server and TUI parts. To pin a version, use
+`opencode plugin add opencode-llm-vibe@0.1.0`.
+
+You can also add it to `opencode.json(c)` manually:
 
 ```jsonc
 {
