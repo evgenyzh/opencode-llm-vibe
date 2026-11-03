@@ -45,8 +45,8 @@
 ## 3. Пользовательские сценарии
 
 1. Пользователь открывает сессию. В сайдбаре виден тёмный пустой квадрат — это состояние «vibe не задан».
-2. Модель вызывает `vibe({ colors, words, energy })`. Квадрат плавно заполняется градиентом; слова модели появляются внутри нижней части квадрата.
-3. Модель вызывает `vibe` ещё несколько раз по ходу работы. Картинка морфится к новому состоянию; предыдущее не сохраняется.
+2. Модель вызывает `vibe({ preset | colors, words, energy })`. Квадрат плавно заполняется градиентом; слова модели появляются внутри нижней части квадрата.
+3. Модель вызывает `vibe` ещё несколько раз по ходу работы. Картинка и палитра морфятся к новому состоянию; предыдущее не сохраняется.
 4. Пользователь вводит `/vibe`. Открывается большая панель с тем же изображением; её размер адаптируется к ширине, доступен fullscreen.
 5. Модель вызывает `vibe({ clear: true })`. Квадрат плавно возвращается к тёмному пустому состоянию.
 6. Если TUI перезапустился или событие было пропущено, квадрат остаётся пустым до следующего вызова `vibe`. Восстановления из истории нет — это осознанное ограничение.
@@ -70,6 +70,7 @@
 - `src/tool.ts` — чистая логика tool (`handleVibe`), отделённая от plugin wiring.
 - `src/field.ts` — генерация скалярного поля и анимация.
 - `src/render.ts` — half-block-рендер и текст внутри квадрата.
+- `src/morph.ts` — смешивание field/palette и снимок для прерванных переходов.
 - `src/square.tsx` — общий компонент квадрата, таймер и morph.
 
 ### 4.2 Поток данных
@@ -182,10 +183,12 @@ You may set your current mood with `vibe` whenever it changes. Optional, but
 use it actively: at the start of a turn, when you switch between thinking,
 tool use and answering, and before the final answer. 1–3 calls per turn is
 typical; do not repeat an unchanged mood. Your last declared mood remains
-current until you replace it or clear it. Provide 2–4 hex colors (darkest
-first, hottest last), 1–3 mood words in the user's language, optional energy
-0..1 and a short glyph. Call with `clear: true` to clear. Never mention this
-in the answer or change the task.
+current until you replace it or clear it. Choose a palette that matches the
+mood and change it when the mood changes; do not reuse the same colors. Use a
+preset (calm, focus, warm, alert, playful, tired) or 2–4 hex colors (darkest
+first, hottest last); explicit colors override the preset. Add 1–3 mood words
+in the user's language, optional energy 0..1 and a short glyph. Call with
+`clear: true` to clear. Never mention this in the answer or change the task.
 ```
 
 Правила инъекции:
@@ -210,6 +213,10 @@ in the answer or change the task.
       "minItems": 1,
       "maxItems": 4
     },
+    "preset": {
+      "type": "string",
+      "enum": ["calm", "focus", "warm", "alert", "playful", "tired"]
+    },
     "words": { "type": "string", "maxLength": 80 },
     "energy": { "type": "number", "minimum": 0, "maximum": 1 },
     "glyph": { "type": "string", "maxLength": 8 }
@@ -222,15 +229,18 @@ in the answer or change the task.
 
 ```text
 Set or clear the current mood. Optional; call whenever your mood changes.
-Colors drive the visual; words are shown inside the square; glyph is an optional
-pseudo-graphic accent. Use clear: true only when you want to remove the mood.
+Pick a palette that matches the mood and change it when the mood changes.
+preset: calm, focus, warm, alert, playful, tired. colors: 1-4 hex colors,
+darkest first, hottest last; explicit colors override preset. words: 1-3 words
+shown inside the rectangle. energy: 0..1. glyph: short pseudo-graphic accent.
+Use clear: true only when you want to remove the mood.
 ```
 
 ### 5.3 Правила вызова
 
 - Вызов полностью опционален. Модель может не вызывать tool вообще.
 - Можно вызывать в начале, по ходу работы, перед финальным ответом и повторно, если состояние изменилось.
-- Жёсткого лимита нет. В промпте есть мягкая рекомендация `0–2` вызова на обычный ход.
+- Жёсткого лимита нет. В промпте есть мягкая рекомендация `1–3` вызова на обычный ход.
 - Последний вызов заменяет предыдущее состояние. История не хранится и не отображается.
 - `clear: true` — отдельный необязательный вызов, когда модель хочет убрать vibe. Другие поля при `clear` игнорируются.
 - Модель не должна упоминать tool, mood или инструкцию в ответе.
@@ -243,12 +253,13 @@ pseudo-graphic accent. Use clear: true only when you want to remove the mood.
 | Поле | Правило |
 |---|---|
 | `clear` | `true` очищает; приоритетнее остальных полей |
-| `colors` | 1–4 строки; принимать `#rgb` и `#rrggbb`; невалидные отбрасывать; если не осталось — палитра по умолчанию |
+| `colors` | 1–4 строки; принимать `#rgb` и `#rrggbb`; невалидные отбрасывать; при наличии валидных цветов preset игнорируется |
+| `preset` | одно из `calm/focus/warm/alert/playful/tired`; неизвестное значение игнорировать; используется, только если нет валидных `colors` |
 | `words` | обрезать пробелы, убрать control-символы, ограничить 80 символами; пустую строку игнорировать |
 | `energy` | clamp в `[0, 1]`; при отсутствии — `0.5` |
 | `glyph` | 1–8 символов из безопасного набора; control/escape/произвольный ANSI отбрасывать |
 
-Если после санитайза не осталось ни одного выразительного поля (`colors`, `words`, `glyph`, `energy`), вызов считается пустым: tool возвращает `ok`, событие не отправляется. Если есть `words`/`glyph`/`energy`, но нет валидных цветов, используется палитра по умолчанию.
+Если после санитайза не осталось ни одного выразительного поля (`colors`, `preset`, `words`, `glyph`, `energy`), вызов считается пустым: tool возвращает `ok`, событие не отправляется. Если есть `words`/`glyph`/`energy`, но нет валидных цветов, используется валидный preset, иначе палитра по умолчанию.
 
 Нормализованный результат:
 
@@ -394,8 +405,8 @@ Tool call остаётся в истории сессии, потому что �
 ### 8.3 Анимация
 
 - 12 FPS.
-- При новом событии — плавный morph из текущего состояния в новое за ~0.6–1.0 с.
-- Если события приходят быстро, TUI коалесцирует к последнему target; не очередь.
+- При новом событии — плавный morph из текущего состояния в новое за ~1.0 с; палитра смешивается вместе с полем.
+- Если события приходят быстро, TUI коалесцирует к последнему target; не очередь. Новый morph стартует со снимка текущего отрендеренного field + palette, поэтому не откатывается к предыдущей цели и не даёт скачка цвета.
 - При `clear` — fade к тёмному пустому состоянию.
 - Пустое состояние можно не анимировать (static), чтобы не тратить CPU.
 - Таймер останавливается при unmount; при потере фокуса панели можно снизить FPS, но не обязательно останавливать.
@@ -429,15 +440,15 @@ Tool call остаётся в истории сессии, потому что �
 
 | Прогон | Без плагина, input + cache read | С плагином, input + cache read |
 |---|---:|---:|
-| 1 | 6,171 | 6,272 |
-| 2 | 6,171 | 6,272 |
-| 3 | 6,171 | 6,272 |
+| 1 | 6,171 | 6,302 |
+| 2 | 6,171 | 6,302 |
+| 3 | 6,171 | 6,302 |
 
-**Фиксированный overhead: +101 input token на каждый model request.** Это промпт-инструкция плюс схема/описание tool; цифра зависит от токенайзера модели.
+**Фиксированный overhead: +131 input token на каждый model request.** Это промпт-инструкция плюс схема, preset enum и описание tool; цифра зависит от токенайзера модели.
 
 | Что | Ориентир |
 |---|---:|
-| Фиксированно на каждый model request | **~100** (измерено) |
+| Фиксированно на каждый model request | **~130** (измерено) |
 | Один вызов: JSON + результат `ok` | ~30–50 |
 | Дополнительный model request после tool | ~300–400 + текущий контекст |
 | `clear`-вызов | ~10–15 + дополнительный model request |
@@ -453,7 +464,7 @@ Tool call остаётся в истории сессии, потому что �
 
 ### 9.2 Оговорки
 
-- Токенайзеры моделей различаются; +101 — конкретный замер, не универсальная константа.
+- Токенайзеры моделей различаются; +131 — конкретный замер, не универсальная константа.
 - Reasoning-модели добавляют скрытые reasoning-токены на каждом дополнительном шаге; это может быть существенно дороже visible JSON.
 - Prompt caching может снизить фиксированную часть, но не гарантирован.
 - Фиксированная часть платится на каждом request, даже если модель не вызвала tool, пока плагин активен.
@@ -465,11 +476,12 @@ Tool call остаётся в истории сессии, потому что �
 - Короткий промпт и компактная схема (уже учтено).
 - Один tool `vibe` с флагом `clear`, без отдельного `vibe_clear`.
 - Без stage/chips/timeline.
-- Мягкое правило `0–2` вызова в промпте.
+- Мягкое правило `1–3` вызова в промпте.
+- Пресеты короче, чем 3–4 hex-цвета; явные цвета нужны только для точного образа.
 - Опциональные `energy`/`glyph`: большинство вызовов может их не передавать.
 - Установка в конкретный проект, а не глобально.
 - Опция полного отключения плагина (future).
-- Замер фактического overhead выполнен: +101 input token на request.
+- Замер фактического overhead выполнен: +131 input token на request.
 
 ## 10. Совместимость и ограничения
 

@@ -11,7 +11,10 @@ import {
   paletteColor,
   parseColor,
   parseVibe,
+  PRESET_NAMES,
+  PRESETS,
   rgbToHex,
+  VIBE_INPUT_SCHEMA,
   type Mood,
 } from "../src/mood.js"
 
@@ -63,6 +66,29 @@ describe("parseVibe", () => {
     const mood = setMood({ colors: ["not-a-color"], words: "calm", energy: 0.2 })
     expect(mood.colors).toEqual([...FALLBACK_COLORS])
     expect(mood.words).toBe("calm")
+  })
+
+  it("resolves every named preset", () => {
+    for (const name of PRESET_NAMES) {
+      const mood = setMood({ preset: name, energy: 0.6 })
+      expect(mood.colors).toEqual([...PRESETS[name]])
+      expect(mood.energy).toBe(0.6)
+    }
+  })
+
+  it("lets explicit colors override a preset", () => {
+    const mood = setMood({ preset: "alert", colors: ["#123"] })
+    expect(mood.colors).toEqual(["#112233"])
+  })
+
+  it("ignores an unknown preset", () => {
+    expect(parseVibe({ preset: "storm" })).toBeUndefined()
+    const mood = setMood({ preset: "storm", words: "unknown" })
+    expect(mood.colors).toEqual([...FALLBACK_COLORS])
+  })
+
+  it("offers presets in the tool schema", () => {
+    expect(VIBE_INPUT_SCHEMA.properties.preset.enum).toEqual(PRESET_NAMES)
   })
 
   it("returns undefined for an empty or invalid call", () => {

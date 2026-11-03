@@ -40,11 +40,14 @@ describe("prompt text", () => {
     expect(VIBE_PROMPT).toContain("1–3 calls per turn")
     expect(VIBE_PROMPT).toContain("clear: true")
     expect(VIBE_PROMPT).toContain("Never mention this")
+    expect(VIBE_PROMPT).toContain("do not reuse the same colors")
+    expect(VIBE_PROMPT).toContain("explicit colors override the preset")
   })
 
   it("describes the tool fields compactly", () => {
     expect(VIBE_TOOL_DESCRIPTION).toContain("clear: true")
     expect(VIBE_TOOL_DESCRIPTION).toContain("colors")
     expect(VIBE_TOOL_DESCRIPTION).toContain("energy")
+    expect(VIBE_TOOL_DESCRIPTION).toContain("preset")
   })
 })

@@ -25,6 +25,7 @@
 - [x] `src/field.ts`: скалярное поле и анимация.
 - [x] `src/render.ts`: half-block и текст внутри квадрата.
 - [x] `src/activity.ts`: live-активность сессии и множители темпа.
+- [x] `src/morph.ts`: безопасный morph field/palette и снимок для прерванных переходов.
 - [x] `src/tui.tsx`: RPC-подписка, in-memory state, sidebar, `/vibe` panel.
 - [x] `src/square.tsx`: компонент квадрата (если вынесен отдельно).
 - [x] Тесты на чистые функции и prompt hook.
@@ -86,7 +87,8 @@ npm pack --dry-run
 
 - [x] `src/mood.ts`:
   - типы `Mood`, `VibeInput`, `VIBE_INPUT_SCHEMA` (JSON Schema для tool input);
-  - `parseVibe(input: unknown): VibeInput`;
+  - `PRESETS` (`calm/focus/warm/alert/playful/tired`) и `PRESET_NAMES`;
+  - `parseVibe(input: unknown): VibeInput`; explicit `colors` важнее `preset`;
   - `normalizeMood`;
   - `parseColor` (`#rgb`, `#rrggbb`), `toHex`, `darken`, `mix`, `buildPalette`;
   - `EMPTY_MOOD` / `DEFAULT_ENERGY`;
@@ -100,6 +102,7 @@ npm pack --dry-run
   - set с 1, 2, 4 цветами;
   - 5 цветов → truncate;
   - невалидные цвета → fallback, если есть words/glyph/energy; иначе `undefined`;
+  - preset разворачивается в цвета; explicit colors важнее; неизвестный preset игнорируется;
   - `energy` clamp;
   - `words` control/длина;
   - `glyph` whitelist/длина;
@@ -228,7 +231,7 @@ npm pack --dry-run
   - `sampleField(width,height)` + `renderRows` + `<text content={...} selectable={false} />`;
   - **не** передавать `StyledText` в `content` prop; присваивать через `ref`;
   - центр в `<box alignItems="center">`;
-  - morph при смене mood (previous/target + progress);
+  - morph при смене mood ~1 с; при interrupt стартует со снимка текущих field + palette;
   - cleanup таймера.
 - [x] Проверить:
   - sidebar не крадёт фокус;
@@ -288,7 +291,7 @@ npm pack --dry-run
 5. Записать результат в `README.md`/`SPEC.md` (раздел «Токенный бюджет»).
 6. Проверить, что reasoning-модель не даёт неожиданно большой overhead; при необходимости уменьшить промпт/схему.
 
-**Результат:** 3 прогона с плагином и 3 без, DeepSeek V4 Flash (Bifrost), промпт без вызова tool. Суммарный prompt: 6,272 против 6,171 → **+101 input token** фиксированного overhead. Записано в `SPEC.md` §9 и `README.md`.
+**Результат:** 3 прогона с плагином и 3 без, DeepSeek V4 Flash (Bifrost), промпт без вызова tool. Суммарный prompt: 6,302 против 6,171 → **+131 input token** фиксированного overhead. Записано в `SPEC.md` §9 и `README.md`.
 
 ### 7.3 Документация
 
@@ -337,6 +340,7 @@ llm-vibe/
 │   ├── prompt.ts     # prompt + tool description
 │   ├── activity.ts   # session activity -> tempo
 │   ├── motion.ts     # smoothed phase/tempo state
+│   ├── morph.ts      # field/palette morph + snapshots
 │   ├── field.ts      # scalar field/animation
 │   ├── render.ts     # half-block + caption
 │   ├── tui.tsx       # TUI plugin, slots, command, subscription
@@ -347,6 +351,7 @@ llm-vibe/
 │   ├── tool.test.ts
 │   ├── activity.test.ts
 │   ├── motion.test.ts
+│   ├── morph.test.ts
 │   ├── field.test.ts
 │   └── render.test.ts
 └── .github/workflows/ci.yml
@@ -358,6 +363,7 @@ llm-vibe/
 |---|---|---|
 | `parseVibe` set/clear/invalid | да | — |
 | colors/energy/words/glyph sanitize | да | — |
+| presets + explicit colors precedence | да | — |
 | prompt injection condition/duplicates | да | — |
 | tool emits updated/null | да | — |
 | field dimensions/finite/determinism | да | — |
@@ -365,6 +371,8 @@ llm-vibe/
 | sidebar default/update | — | да |
 | `/vibe` open/close/fullscreen | — | да |
 | multiple updates morph | — | да |
+| morph start/end/snapshot continuity | да | — |
+| rapid updates continue from rendered palette | — | да |
 | activity tempo idle/thinking/tool/writing | да | да |
 | smooth tempo / continuous phase | да | да |
 | clear → empty | — | да |
@@ -391,9 +399,9 @@ llm-vibe/
 
 | Риск | Mitigation |
 |---|---|
-| Модель игнорирует optional tool | Короткий явный промпт, описание tool, 0–2 guidance; пустой default не выглядит ошибкой |
+| Модель игнорирует optional tool | Короткий явный промпт, описание tool, 1–3 guidance; пустой default не выглядит ошибкой |
 | Слишком большой token overhead | Компактная схема, один tool, без stages, замер, project-local install |
-| Tool call history растёт | Мягкое 0–2, нет жёсткого лимита; compaction; замер |
+| Tool call history растёт | Мягкое 1–3, нет жёсткого лимита; compaction; замер |
 | Пропущенное RPC-событие | Принято: пустой квадрат до следующего вызова; нет scan |
 | TUI restart теряет mood | Принято; модель обновит при следующем ходе |
 | Медленный рендер | W 24–32, H 18–24, 12 FPS, static empty, cleanup |
@@ -420,7 +428,7 @@ llm-vibe/
 - Plugin options в v1 нет.
 - `/vibe clear` для пользователя не делаем.
 - Prompt/tool активны во всех сессиях, включая subagent-сессии.
-- Токенный overhead замерен: +101 input token на request.
+- Токенный overhead замерен: +131 input token на request.
 - Достаточно раздела в README/SPEC, отдельный `TOKENS.md` не нужен.
 
 Future:

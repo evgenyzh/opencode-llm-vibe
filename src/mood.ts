@@ -30,6 +30,27 @@ export const MAX_WORDS = 80
 export const MAX_GLYPH = 8
 export const PALETTE_SIZE = 8
 
+/** Semantic palettes for models that prefer a name over raw hex colors. */
+export const PRESETS = {
+  calm: ["#08131f", "#1f6f78", "#8fd6c9"],
+  focus: ["#0b1026", "#3d5afe", "#ffb74d"],
+  warm: ["#1f0a12", "#a63d40", "#ffb27a"],
+  alert: ["#1a0505", "#d7263d", "#ffd166"],
+  playful: ["#160b2b", "#9b5de5", "#f15bb5", "#4adede"],
+  tired: ["#0d0f14", "#343b4a", "#7d8496"],
+} as const satisfies Record<string, readonly string[]>
+
+export type PresetName = keyof typeof PRESETS
+
+export const PRESET_NAMES = [
+  "calm",
+  "focus",
+  "warm",
+  "alert",
+  "playful",
+  "tired",
+] as const satisfies readonly PresetName[]
+
 /** Used when a call has words/energy/glyph but no valid colors. */
 export const FALLBACK_COLORS = ["#1b1b2f", "#4b3f72", "#c86b85"] as const
 
@@ -44,6 +65,7 @@ export const VIBE_INPUT_SCHEMA = {
       minItems: 1,
       maxItems: MAX_COLORS,
     },
+    preset: { type: "string", enum: PRESET_NAMES },
     words: { type: "string", maxLength: MAX_WORDS },
     energy: { type: "number", minimum: 0, maximum: 1 },
     glyph: { type: "string", maxLength: MAX_GLYPH },
@@ -82,6 +104,11 @@ function sanitizeGlyph(value: unknown): string | undefined {
   const chars = Array.from(value).filter((char) => GLYPH_CHAR.test(char))
   const glyph = chars.slice(0, MAX_GLYPH).join("")
   return glyph || undefined
+}
+
+function resolvePreset(value: unknown): readonly string[] | undefined {
+  if (typeof value !== "string" || !Object.hasOwn(PRESETS, value)) return undefined
+  return PRESETS[value as PresetName]
 }
 
 export function parseColor(value: unknown): string | undefined {
@@ -208,6 +235,7 @@ export function parseVibe(input: unknown): VibeInput | undefined {
     }
   }
 
+  const preset = colors.length > 0 ? undefined : resolvePreset(input.preset)
   const words = sanitizeWords(input.words)
   const glyph = sanitizeGlyph(input.glyph)
   const energy =
@@ -215,14 +243,20 @@ export function parseVibe(input: unknown): VibeInput | undefined {
       ? clamp(input.energy, 0, 1)
       : undefined
 
-  if (colors.length === 0 && words === undefined && glyph === undefined && energy === undefined) {
+  if (
+    colors.length === 0 &&
+    preset === undefined &&
+    words === undefined &&
+    glyph === undefined &&
+    energy === undefined
+  ) {
     return undefined
   }
 
   return {
     kind: "set",
     mood: {
-      colors: colors.length > 0 ? colors : [...FALLBACK_COLORS],
+      colors: colors.length > 0 ? colors : preset ? [...preset] : [...FALLBACK_COLORS],
       ...(words === undefined ? {} : { words }),
       energy: energy ?? DEFAULT_ENERGY,
       ...(glyph === undefined ? {} : { glyph }),

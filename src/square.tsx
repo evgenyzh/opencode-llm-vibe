@@ -5,20 +5,14 @@ import type { PanelInput } from "@opencode/plugin/tui/context"
 import type { TextRenderable } from "@opentui/core"
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { activitySpeed, type Activity } from "./activity.js"
-import { blendFields, normalizeSize, sampleField } from "./field.js"
-import { blendPalettes, type Mood } from "./mood.js"
+import { normalizeSize } from "./field.js"
+import type { Mood } from "./mood.js"
+import { MORPH_MS, visualAt, type Transition } from "./morph.js"
 import { advanceMotion, type MotionState } from "./motion.js"
-import {
-  captionFor,
-  paletteFor,
-  renderField,
-  renderSquare,
-  type RenderedSquare,
-} from "./render.js"
+import { captionFor, renderField, type RenderedSquare } from "./render.js"
 
 const FPS = 12
 const FRAME_MS = 1000 / FPS
-const MORPH_MS = 700
 
 /** Motion survives host re-renders; sidebar and panel animate independently. */
 const motions = new Map<string, MotionState>()
@@ -47,24 +41,10 @@ export interface MoodSquareProps {
   readonly panel?: PanelInput
 }
 
-interface Transition {
-  readonly from: Mood | null
-  readonly to: Mood | null
-  readonly start: number
-}
-
 function now(): number {
   return typeof performance === "object" && typeof performance.now === "function"
     ? performance.now()
     : Date.now()
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function ease(value: number): number {
-  return value * value * (3 - 2 * value)
 }
 
 export function MoodSquare(props: MoodSquareProps) {
@@ -121,7 +101,26 @@ export function MoodSquare(props: MoodSquareProps) {
     }
     if (next === last) return
 
-    transition = { from: last, to: next, start: now() }
+    const at = now()
+    const columns = normalizeSize(props.columns)
+    const pixelRows = normalizeSize(props.pixelRows)
+    const active = transition !== undefined && at - transition.start < MORPH_MS
+    const snapshot = visualAt(
+      last,
+      active ? transition : undefined,
+      motion.phase,
+      columns,
+      pixelRows,
+      at,
+    )
+
+    transition = {
+      fromMood: last,
+      ...(active ? { fromField: snapshot.field } : {}),
+      fromPalette: snapshot.palette,
+      to: next,
+      start: at,
+    }
     last = next
     setTick((value) => value + 1)
     if (next !== null) start()
@@ -148,22 +147,21 @@ export function MoodSquare(props: MoodSquareProps) {
     tick()
     const columns = normalizeSize(props.columns)
     const pixelRows = normalizeSize(props.pixelRows)
-    const current = transition
-
-    if (!current) return renderSquare(props.mood, columns, pixelRows, motion.phase)
-
-    const raw = clamp((now() - current.start) / MORPH_MS, 0, 1)
-    if (raw >= 1) return renderSquare(props.mood, columns, pixelRows, motion.phase)
-
-    const progress = ease(raw)
-    const field = blendFields(
-      sampleField(current.from, motion.phase, columns, pixelRows),
-      sampleField(current.to, motion.phase, columns, pixelRows),
-      progress,
+    const visual = visualAt(
+      props.mood,
+      transition,
+      motion.phase,
+      columns,
+      pixelRows,
+      now(),
     )
-    const palette = blendPalettes(paletteFor(current.from), paletteFor(current.to), progress)
-    const caption = progress < 0.45 ? captionFor(current.from, columns) : captionFor(current.to, columns)
-    return renderField(field, columns, pixelRows, palette, caption)
+    return renderField(
+      visual.field,
+      columns,
+      pixelRows,
+      visual.palette,
+      captionFor(visual.mood, columns),
+    )
   })
 
   createEffect(() => {
