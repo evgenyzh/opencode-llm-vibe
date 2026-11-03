@@ -1,27 +1,33 @@
 # opencode-llm-vibe
 
-An OpenCode V2 plugin that lets the model declare its current mood with a `vibe`
-tool and renders it as an animated pseudo-graphic rectangle in the TUI.
+[![npm version](https://img.shields.io/npm/v/opencode-llm-vibe)](https://www.npmjs.com/package/opencode-llm-vibe)
+[![CI](https://github.com/evgenyzh/opencode-llm-vibe/actions/workflows/ci.yml/badge.svg)](https://github.com/evgenyzh/opencode-llm-vibe/actions/workflows/ci.yml)
 
-The rectangle lives in the sidebar. `/vibe` toggles it on or off; with no mood
-the slot blends into the theme background.
+A mood side-channel for OpenCode V2. The model calls the direct `vibe` tool, and
+the TUI draws an animated pseudo-graphic blob in the sidebar.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/evgenyzh/opencode-llm-vibe/main/assets/llm-vibe.png" alt="llm-vibe sidebar with a deep focus mood" width="300">
-</p>
+![llm-vibe sidebar with a deep focus mood](https://raw.githubusercontent.com/evgenyzh/opencode-llm-vibe/main/assets/llm-vibe.png)
+
+*`deep focus` in the OpenCode sidebar.*
 
 ## Install
 
-Install the package globally:
+Requires OpenCode 2.2+ and Node.js 22+.
 
 ```sh
 opencode plugin add opencode-llm-vibe
 ```
 
-One entry loads both the server and TUI parts. To pin a version, use
-`opencode plugin add opencode-llm-vibe@0.1.0`.
+One entry loads both the server and TUI parts. Check the result with
+`opencode plugin list`, and run `/reload` if the sidebar does not appear.
 
-You can also add it to `opencode.json(c)` manually:
+To pin a version:
+
+```sh
+opencode plugin add opencode-llm-vibe@0.1.1
+```
+
+Manual configuration is also supported:
 
 ```jsonc
 {
@@ -52,12 +58,12 @@ the prompt instruction, the `vibe` tool, and the RPC event.
 
 ## Usage
 
-The model may call the tool whenever it wants, with a preset or explicit colors:
+The model calls `vibe` with a preset or explicit colors:
 
 ```json
 {
   "preset": "calm",
-  "words": "спокойствие",
+  "words": "calm",
   "energy": 0.4,
   "glyph": "✦"
 }
@@ -66,31 +72,33 @@ The model may call the tool whenever it wants, with a preset or explicit colors:
 ```json
 {
   "colors": ["#112244", "#4b3f72", "#ff8844"],
-  "words": "спокойствие",
+  "words": "calm",
   "energy": 0.4,
   "glyph": "✦"
 }
 ```
 
 - `preset` — `calm`, `focus`, `warm`, `alert`, `angry`, `playful`, or `tired`.
-  `angry` is a blood-red → orange palette; pair it with higher `energy` for a
-  more turbulent field.
 - `colors` — 1–4 hex colors, darkest first, hottest last. Explicit colors
   override a preset.
 - `words` — short mood words shown inside the lower part of the rectangle.
 - `energy` — `0..1`; controls motion and turbulence.
 - `glyph` — optional short pseudo-graphic accent.
 
-The prompt asks the model to change the palette when the mood changes, so
-different vibes do not collapse into the same blue/orange gradient.
+| Preset | Palette |
+| --- | --- |
+| `calm` | deep teal → mint |
+| `focus` | navy → blue → amber |
+| `warm` | wine → coral → peach |
+| `alert` | dark red → red → yellow |
+| `angry` | near-black → blood red → orange |
+| `playful` | violet → magenta → cyan |
+| `tired` | slate → gray-blue |
 
-The prompt makes the tool part of every turn: call `vibe` at the very start,
-before any other tool, even for a one-line answer; then update it when the
-activity or findings change and once more before the final answer (2–4 calls is
-typical, with no hard cap; the first and last are mandatory). The tool is
-registered as a direct tool (`codemode: false`), so the model can call it
-without routing through `execute`. The last call wins; there is no history. To
-remove the mood, the model calls:
+The prompt makes `vibe` part of every turn: at the very start, before any other
+tool, then when the activity or findings change, and once more before the final
+answer. 2–4 calls per turn is typical; the first and last are mandatory. The
+last call wins and there is no history. To remove the mood, the model calls:
 
 ```json
 { "clear": true }
@@ -133,29 +141,17 @@ session history.
 The renderer uses half blocks (`▀`): `fg` is the top pixel and `bg` is the bottom
 pixel, with 24-bit color.
 
-## Token overhead
+## Overhead
 
-Measured on DeepSeek V4 Flash (Bifrost), 3 runs with the plugin and 3 without,
-using a prompt that does not call the tool:
+The plugin adds a small fixed instruction and tool schema to every model request:
+**~135 input tokens** in the last measurement. The current mandatory-side-channel
+wording is slightly longer, so re-measure if the exact budget matters. A direct
+`vibe` call adds roughly 30–50 tokens plus one extra model request that re-reads
+the current context.
 
-| | Without plugin | With plugin |
-|---|---:|---:|
-| Prompt tokens (input + cache read) | 6,171 | 6,306 |
-
-**Fixed overhead was +135 input tokens per model request** in the last measured
-build. That is the system instruction plus the tool schema, the preset enum, and
-the description. The current mandatory-side-channel wording is slightly longer;
-re-measure if the exact budget matters. Exact numbers vary by tokenizer and
-model.
-
-A direct `vibe` call adds roughly 30–50 tokens of JSON plus `ok`, and causes one
-extra model request that re-reads the current context (~300–400 tokens plus
-context). The tool call also stays in the session history and adds roughly
-30–60 tokens per later request. The prompt asks for at least two calls on a
-normal turn (first and before the final answer), with more when the activity or
-findings change; 2–4 is typical and there is no hard limit.
-
-See [`SPEC.md`](./SPEC.md) §9 for the full budget and caveats.
+The full table, caveats, and reduction notes are in
+[`SPEC.md`](https://github.com/evgenyzh/opencode-llm-vibe/blob/main/SPEC.md#9-токенный-бюджет)
+§9.
 
 ## How it works
 
@@ -178,7 +174,9 @@ animated rectangle
 ```
 
 - Server part: `src/index.ts`, `src/tool.ts`, `src/prompt.ts`, `src/rpc.ts`.
-- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/dimensions.ts`, `src/activity.ts`, `src/context-usage.ts`, `src/motion.ts`, `src/morph.ts`, `src/field.ts`, `src/render.ts`.
+- TUI part: `src/tui.tsx`, `src/square.tsx`, `src/dimensions.ts`,
+  `src/activity.ts`, `src/context-usage.ts`, `src/motion.ts`, `src/morph.ts`,
+  `src/field.ts`, `src/render.ts`.
 - Shared protocol: `src/mood.ts`, `src/rpc.ts`.
 
 There is no server-side storage, database, file cache, `ctx.storage`, history
@@ -186,6 +184,18 @@ scan, or auto-clear. The TUI keeps only in-memory maps. Context fill comes from
 `session.step.ended` tokens plus the selected model's context limit and is not
 persisted. An RPC event missed while the TUI is disconnected is intentionally
 not recovered; the slot stays blank until the next `vibe` call.
+
+## Troubleshooting
+
+- **The sidebar slot is empty.** No mood has been set in this session yet, or
+  the TUI missed the live RPC event. The next `vibe` call fixes it. State is not
+  restored after a TUI restart.
+- **The plugin is not loaded.** Run `opencode plugin list`, then `/reload` in
+  the TUI. Server logs are in `~/.local/share/opencode/log/opencode.log`;
+  filter `role=server` for the plugin and `role=cli` for the TUI.
+- **The rectangle is hidden.** Run `/vibe` to toggle it back on.
+- **No colors.** OpenCode needs a true-color terminal; the renderer uses 24-bit
+  half-block cells.
 
 ## Development
 

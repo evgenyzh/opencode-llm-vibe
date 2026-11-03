@@ -1,7 +1,7 @@
 {
   "name": "opencode-llm-vibe",
-  "version": "0.1.0",
-  "description": "Let the model declare its mood; render it as an animated pseudo-graphic square in the OpenCode TUI.",
+  "version": "0.1.1",
+  "description": "Let the model declare its mood; render it as an animated pseudo-graphic rectangle in the OpenCode TUI.",
   "license": "MIT",
   "author": "Evgeny Zhuravlev",
   "type": "module",
