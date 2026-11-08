@@ -1,4 +1,4 @@
-/** TUI part: RPC subscription, sidebar rectangle, and the /vibe toggle. */
+/** TUI part: RPC subscription, sidebar rectangle, and Vibe settings. */
 
 import { Plugin } from "@opencode/plugin/tui"
 import { createSignal, Show } from "solid-js"
@@ -14,6 +14,7 @@ import { SIDEBAR_COLUMNS, SIDEBAR_PIXEL_ROWS } from "./dimensions.js"
 import type { Mood } from "./mood.js"
 import { VibeRpc } from "./rpc.js"
 import { MoodSquare } from "./square.js"
+import { defaultStyleFor, styleFor, STYLE_OPTIONS, type StyleSettings, type VisualStyle } from "./styles.js"
 
 /** Live-only TUI state. Restarting the TUI intentionally loses it. */
 const [moods, setMoods] = createStore<Record<string, Mood | null>>({})
@@ -24,6 +25,9 @@ export default Plugin.define({
   id: "llm-vibe.tui",
   setup(context) {
     const [visible, setVisible] = createSignal(true)
+    const [styles, updateStyles] = context.storage.store<StyleSettings>("styles", {
+      initial: { defaultStyle: "morph", sessions: {} },
+    })
     const vibe = context.client.rpc(VibeRpc)
     const unsubscribe = vibe.events.on("updated", (event) => {
       const data = event.data as { sessionID: string; mood: Mood | null }
@@ -92,24 +96,81 @@ export default Plugin.define({
             pixelRows={SIDEBAR_PIXEL_ROWS}
             activity={activities[sessionID] ?? "idle"}
             contextRatio={contextLevels[sessionID] ?? 0.5}
+            style={styleFor(styles, sessionID)}
           />
         </Show>
       ),
     })
 
+    const chooseSessionStyle = async (sessionID: string): Promise<void> => {
+      const selected = await context.ui.dialog.select<VisualStyle | "default">({
+        title: "Vibe style for this session",
+        current: styles.sessions?.[sessionID] ?? "default",
+        options: [
+          { title: "Use default", value: "default", description: `Currently ${defaultStyleFor(styles)}` },
+          ...STYLE_OPTIONS,
+        ],
+      })
+      if (selected === undefined) return
+      try {
+        await updateStyles((draft) => {
+          draft.sessions ??= {}
+          if (selected === "default") delete draft.sessions[sessionID]
+          else draft.sessions[sessionID] = selected
+        })
+      } catch {
+        context.ui.toast.show({ message: "Could not save vibe style", variant: "error" })
+      }
+    }
+
+    const chooseDefaultStyle = async (): Promise<void> => {
+      const selected = await context.ui.dialog.select<VisualStyle>({
+        title: "Default vibe style",
+        current: defaultStyleFor(styles),
+        options: STYLE_OPTIONS,
+      })
+      if (selected === undefined) return
+      try {
+        await updateStyles((draft) => { draft.defaultStyle = selected })
+      } catch {
+        context.ui.toast.show({ message: "Could not save default vibe style", variant: "error" })
+      }
+    }
+
+    const openSettings = async (): Promise<void> => {
+      while (true) {
+        const route = context.ui.router.current()
+        const sessionID = route.type === "session" ? route.sessionID : undefined
+        const selected = await context.ui.dialog.select<"visible" | "session" | "default">({
+          title: "Vibe settings",
+          options: [
+            { title: visible() ? "Hide vibe" : "Show vibe", value: "visible", description: visible() ? "Currently visible" : "Currently hidden" },
+            {
+              title: "Style for this session", value: "session", disabled: sessionID === undefined,
+              description: sessionID === undefined ? "Open a session to choose its style" :
+                `${styleFor(styles, sessionID)}${styles.sessions?.[sessionID] ? " (override)" : " (default)"}`,
+            },
+            { title: "Default style", value: "default", description: defaultStyleFor(styles) },
+          ],
+        })
+        if (selected === undefined) return
+        if (selected === "visible") setVisible((value) => !value)
+        if (selected === "session" && sessionID !== undefined) await chooseSessionStyle(sessionID)
+        if (selected === "default") await chooseDefaultStyle()
+      }
+    }
+
     context.keymap.layer(() => ({
       mode: "global",
       commands: [
         {
-          id: "llm-vibe.toggle",
-          title: "Toggle vibe in sidebar",
-          description: "Show or hide the mood rectangle in the sidebar",
+          id: "llm-vibe.settings",
+          title: "Vibe settings",
+          description: "Show or hide Vibe and choose its animation",
           group: "Vibe",
+          palette: true,
           slash: { name: "vibe" },
-          enabled: () => context.ui.router.current().type === "session",
-          run: () => {
-            setVisible((value) => !value)
-          },
+          run: openSettings,
         },
       ],
     }))

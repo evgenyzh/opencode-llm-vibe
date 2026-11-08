@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { sampleField } from "../src/field.js"
 import type { Mood } from "../src/mood.js"
-import { MORPH_MS, transitionEnergy, visualAt, type Transition } from "../src/morph.js"
+import { MORPH_MS, transitionEnergy, visualAt, visualColorsAt, type Transition } from "../src/morph.js"
 import { paletteFor } from "../src/render.js"
 
 const calm: Mood = { colors: ["#08131f", "#1f6f78", "#8fd6c9"], energy: 0.3 }
@@ -20,6 +20,14 @@ function transitionTo(to: Mood, start = 0): Transition {
 }
 
 describe("visualAt", () => {
+  it("provides identical palette and caption transitions without a Morph field", () => {
+    for (const transition of [undefined, transitionTo(alert), { ...transitionTo(alert), to: null }]) {
+      for (const at of [0, MORPH_MS / 2, MORPH_MS]) {
+        const visual = visualAt(alert, transition, 0, COLUMNS, PIXEL_ROWS, at)
+        expect(visualColorsAt(alert, transition, at)).toEqual({ palette: visual.palette, mood: visual.mood })
+      }
+    }
+  })
   it("returns the current mood when there is no transition", () => {
     const visual = visualAt(calm, undefined, 1.2, COLUMNS, PIXEL_ROWS, 0)
     expect(visual.mood).toBe(calm)

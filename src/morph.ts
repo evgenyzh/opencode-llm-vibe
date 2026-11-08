@@ -23,6 +23,23 @@ export interface Visual {
   readonly mood: Mood | null
 }
 
+/** Palette/caption transition without generating the Morph field. */
+export function visualColorsAt(
+  mood: Mood | null,
+  transition: Transition | undefined,
+  at: number,
+  background?: Rgb,
+): Pick<Visual, "palette" | "mood"> {
+  if (!transition) return { palette: paletteFor(mood, background), mood }
+  const raw = clamp((at - transition.start) / MORPH_MS, 0, 1)
+  if (raw >= 1) return { palette: paletteFor(transition.to, background), mood: transition.to }
+  const progress = ease(raw)
+  return {
+    palette: blendPalettes(transition.fromPalette, paletteFor(transition.to, background), progress),
+    mood: progress < 0.45 ? transition.fromMood : transition.to,
+  }
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
