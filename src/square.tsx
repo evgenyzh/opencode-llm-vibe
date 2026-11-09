@@ -9,7 +9,7 @@ import { sidebarDimensions } from "./dimensions.js"
 import { blendFields, hashString } from "./field.js"
 import { buildPalette, paletteColor, type Mood, type Rgb } from "./mood.js"
 import { MORPH_MS, transitionEnergy, visualAt, visualColorsAt, type Transition } from "./morph.js"
-import { advanceMotion, type MotionState } from "./motion.js"
+import { advanceMorphMotion, advanceMotion, type MorphMotionState, type MotionState } from "./motion.js"
 import { renderNeural } from "./neural-render.js"
 import { resizeNeural } from "./neural.js"
 import { captionFor, renderField, type CaptionColors, type RenderedSquare } from "./render.js"
@@ -29,6 +29,7 @@ interface SessionVisual {
   transition?: Transition
   /** Blob identity is pinned per session, so moods migrate instead of reseeding. */
   shapeSeed: number
+  morphMotion: MorphMotionState
   opacity?: { from: number; to: number; start: number }
 }
 
@@ -42,7 +43,7 @@ const measuredWidths = new Map<string, number>()
 function visualFor(key: string, mood: Mood | null): SessionVisual {
   let visual = visuals.get(key)
   if (!visual) {
-    visual = { last: mood, shapeSeed: hashString(`${key}:shape`) }
+    visual = { last: mood, shapeSeed: hashString(`${key}:shape`), morphMotion: { time: 0, blobPhase: 0 } }
     visuals.set(key, visual)
   }
   return visual
@@ -82,7 +83,11 @@ export function MoodSquare(props: MoodSquareProps) {
   }
   const instanceKey = `${props.sessionID}:sidebar`
   const [tick, setTick] = createSignal(0)
-  const neuralInputColor = createMemo(() => props.mood ? paletteColor(buildPalette(props.mood.colors), 0.85) : undefined)
+  const neuralInputColors = createMemo(() => {
+    if (!props.mood) return undefined
+    const palette = buildPalette(props.mood.colors)
+    return [paletteColor(palette, 0.5), paletteColor(palette, 0.95)]
+  })
   const [measuredWidth, setMeasuredWidth] = createSignal<number | undefined>(measuredWidths.get(instanceKey))
   const dimensions = createMemo(() => sidebarDimensions(measuredWidth() ?? props.columns))
   let boxNode:
@@ -145,14 +150,19 @@ export function MoodSquare(props: MoodSquareProps) {
     const currentTime = now()
     const elapsed = Math.min(0.25, (currentTime - lastFrame) / 1000)
     lastFrame = currentTime
+    const previousPhase = motion.phase
     motion = advanceMotion(motion, activitySpeed(props.activity), elapsed)
     motions.set(instanceKey, motion)
+    const energy = session.transition
+      ? transitionEnergy(session.transition, currentTime - elapsed * 500)
+      : session.last?.energy ?? 0.5
+    session.morphMotion = advanceMorphMotion(session.morphMotion, motion.phase - previousPhase, energy)
     contextLevel = advanceContextLevel(contextLevel, targetContext(), elapsed)
     contextLevels.set(props.sessionID, contextLevel)
     if (props.style !== "morph" && props.mood !== null) {
       const { columns, pixelRows } = dimensions()
       advanceSimulation(simulation(props.style, columns, pixelRows), elapsed, motion.tempo, props.mood.energy, contextLevel, props.activity,
-        props.style === "neural" ? neuralInputColor() : undefined)
+        props.style === "neural" ? neuralInputColors() : undefined)
     }
 
     const current = session.transition
@@ -177,18 +187,6 @@ export function MoodSquare(props: MoodSquareProps) {
       session.transition !== undefined && at - session.transition.start < MORPH_MS
         ? session.transition
         : undefined
-    const snapshot = visualAt(
-      session.last,
-      activeTransition,
-      motion.phase,
-      columns,
-      pixelRows,
-      at,
-      background(),
-      radiusScale(contextLevel),
-      session.shapeSeed,
-    )
-
     const fromEnergy = activeTransition
       ? transitionEnergy(activeTransition, at)
       : (session.last?.energy ?? 0.5)
@@ -197,11 +195,19 @@ export function MoodSquare(props: MoodSquareProps) {
       next === null ||
       (activeTransition !== undefined &&
         (activeTransition.fromMood === null || activeTransition.to === null))
+    // Only transitions involving clear/appearance need a frozen field. For
+    // mood-to-mood changes the palette and energy suffice, including when a
+    // transition is interrupted; sampling a Morph field here blocks the TUI.
+    const frozenVisual = nullEdge
+      ? visualAt(session.last, activeTransition, session.morphMotion.time, columns, pixelRows, at,
+          background(), radiusScale(contextLevel), session.shapeSeed, session.morphMotion.blobPhase)
+      : undefined
+    const snapshot = frozenVisual ?? visualColorsAt(session.last, activeTransition, at, background())
 
     session.transition = {
       fromMood: session.last,
       fromEnergy,
-      ...(nullEdge ? { fromField: snapshot.field } : {}),
+      ...(frozenVisual ? { fromField: frozenVisual.field } : {}),
       fromPalette: snapshot.palette,
       to: next,
       start: at,
@@ -236,15 +242,19 @@ export function MoodSquare(props: MoodSquareProps) {
     const at = now()
     const bg = background()
     const morphVisual = props.style === "morph"
-      ? visualAt(target, session.transition, motion.phase, columns, pixelRows, at, bg, radiusScale(contextLevel), session.shapeSeed)
+      ? visualAt(target, session.transition, session.morphMotion.time, columns, pixelRows, at, bg,
+          radiusScale(contextLevel), session.shapeSeed, session.morphMotion.blobPhase)
       : undefined
     const visual = morphVisual ?? visualColorsAt(target, session.transition, at, bg)
     let field: Float32Array
+    let colorField: Float32Array | undefined
+    let state: Simulation | undefined
     if (morphVisual) {
       field = morphVisual.field
     } else {
-      const state = simulation(props.style as SimulationStyle, columns, pixelRows)
-      field = simulationField(state, state.field)
+      state = simulation(props.style as SimulationStyle, columns, pixelRows)
+      colorField = props.style === "embers" ? state.colorField : undefined
+      field = simulationField(state, state.field, colorField)
       // Keep the existing appearance/clear transition for all visual styles.
       const opacity = session.opacity
         ? simulationOpacity(session.opacity.from, session.opacity.to, at - session.opacity.start, MORPH_MS)
@@ -258,6 +268,8 @@ export function MoodSquare(props: MoodSquareProps) {
       } else styleTransition = undefined
     }
     lastField = field
+    const theme = captionColors()
+    const caption = captionFor(visual.mood, columns, theme)
     if (props.style === "neural") {
       const opacity = session.opacity
         ? simulationOpacity(session.opacity.from, session.opacity.to, at - session.opacity.start, MORPH_MS)
@@ -266,8 +278,7 @@ export function MoodSquare(props: MoodSquareProps) {
         ? simulationOpacity(0, 1, at - styleTransition.start, MORPH_MS)
         : 1
       return renderNeural(
-        simulation("neural", columns, pixelRows), visual.palette, captionColors(),
-        captionFor(visual.mood, columns, captionColors()), opacity * entrance,
+        state!, visual.palette, theme, caption, opacity * entrance,
       )
     }
     return renderField(
@@ -275,8 +286,10 @@ export function MoodSquare(props: MoodSquareProps) {
       columns,
       pixelRows,
       visual.palette,
-      captionFor(visual.mood, columns, captionColors()),
+      caption,
       bg,
+      colorField,
+      props.style === "life" || props.style === "embers",
     )
   })
 

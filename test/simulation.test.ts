@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { advanceSimulation, createSimulation, lifeStep, simulationField, simulationFor } from "../src/simulation.js"
+import { advanceSimulation, createSimulation, lifeStep, resizeSimulation, simulationField, simulationFor } from "../src/simulation.js"
 import { simulationOpacity, STYLE_OPTIONS } from "../src/styles.js"
 
 describe("life", () => {
@@ -105,13 +105,51 @@ describe("visual simulations", () => {
     expect(simulationField(s, s.field)).toBe(s.field)
   })
 
+  it("allocates simulation buffers only for the selected engine", () => {
+    for (const style of ["life", "diffusion", "embers", "neural"] as const) {
+      const s = createSimulation(style, 24, 18, 3)
+      expect(s.cells.length > 0).toBe(style === "life")
+      expect(s.trails.length > 0).toBe(style === "life")
+      expect(s.u.length > 0).toBe(style === "diffusion")
+      expect(s.nextV.length > 0).toBe(style === "diffusion")
+      expect(s.colorField.length > 0).toBe(style === "embers")
+      expect(s.field).toHaveLength(24 * 18)
+      expect(s.neural.columns).toBe(style === "neural" ? 12 : 3)
+      expect(s.neural.rows).toBe(style === "neural" ? 9 : 1)
+    }
+  })
+
   it("distributes an ember smoothly across adjacent pixels", () => {
     const s = createSimulation("embers", 24, 18, 2)
-    s.particles = [{ x: 4.5, y: 5.5, life: 0.5, speed: 0.2, strength: 1 }]
+    s.particles = [{ x: 4.5, y: 5.5, life: 0.5, speed: 0.2, strength: 1, color: 0.5 }]
     const field = simulationField(s)
     for (const index of [5 * 24 + 4, 5 * 24 + 5, 6 * 24 + 4, 6 * 24 + 5]) {
       expect(field[index]).toBeCloseTo(0.25)
     }
+  })
+
+  it("tracks each ember's palette position independently of brightness and through resize", () => {
+    const s = createSimulation("embers", 24, 18, 2)
+    s.particles = [
+      { x: 4, y: 5, life: 0.5, speed: 0.2, strength: 1, color: 0.5 },
+      { x: 8, y: 5, life: 0.5, speed: 0.2, strength: 1, color: 0.95 },
+    ]
+    const field = simulationField(s, s.field, s.colorField)
+    expect(field[5 * 24 + 4]).toBe(field[5 * 24 + 8])
+    expect(s.colorField[5 * 24 + 4]).toBeCloseTo(0.5)
+    expect(s.colorField[5 * 24 + 8]).toBeCloseTo(0.95)
+    const resized = resizeSimulation(s, 48, 28)
+    expect(resized.particles.map((particle) => particle.color)).toEqual([0.5, 0.95])
+    expect(resized.colorField).toHaveLength(48 * 28)
+  })
+
+  it("selects both ember colours and retains each until respawn", () => {
+    const s = createSimulation("embers", 24, 18, 42)
+    advanceSimulation(s, 0, 1, 0.5, 0.5)
+    expect(new Set(s.particles.map((particle) => particle.color))).toEqual(new Set([0.5, 0.95]))
+    const colors = s.particles.map((particle) => particle.color)
+    advanceSimulation(s, 0.01, 1, 0.5, 0.5)
+    expect(s.particles.map((particle) => particle.color)).toEqual(colors)
   })
 
   it("keeps embers distributed over the field after repeated respawns", () => {

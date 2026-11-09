@@ -27,7 +27,7 @@ One entry loads both the server and TUI parts. Check the result with
 To pin a version:
 
 ```sh
-opencode plugin add opencode-llm-vibe@0.2.0
+opencode plugin add opencode-llm-vibe@0.2.1
 ```
 
 Manual configuration is also supported:
@@ -161,7 +161,8 @@ activations while retaining its tick clock.
 - Animation tempo follows live activity: idle 0.5×, waiting 0.9×, thinking
   1.7×, writing 2.1×, tool 2.6×, with a ~300 ms ease between speeds. The model
   does not need to call the tool for this; the TUI listens to session events.
-  The renderer runs at 15 FPS.
+  Morph applies a 1.5× activity multiplier and a nonlinear energy-to-blob-speed
+  curve; the other styles keep the listed tempo. The renderer runs at 15 FPS.
 - In the alternative styles, energy influences Life's generation rate,
   reaction–diffusion parameters, the number of embers or Neural's input probability;
   context fill affects reseeding, pattern parameters, particle count or Neural's
@@ -180,7 +181,9 @@ activations while retaining its tick clock.
   new input stops and existing branches reach the output and fade. These weights
   are illustrative, not model telemetry. All styles share the caption and theme
   background.
-- In Neural, newly emitted impulses carry the current mood color; existing
+- In Embers, individual sparks use different parts of the mood palette while
+  fading independently of their color.
+- In Neural, newly emitted impulses pick colors from the current mood palette; existing
   impulses retain their earlier color. A neuron eases toward the weighted mix of
   arriving colors, so the new color travels with activity rather than recoloring
   the whole grid at once. Untouched cells keep their color, including in idle;

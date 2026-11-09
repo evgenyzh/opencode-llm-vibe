@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { buildPalette } from "../src/mood.js"
-import { renderNeural } from "../src/neural-render.js"
+import { buildPalette, mixRgb, type Rgb } from "../src/mood.js"
+import { inkFor, renderNeural } from "../src/neural-render.js"
 import { captionFor, type CaptionColors } from "../src/render.js"
 import { advanceSimulation, createSimulation } from "../src/simulation.js"
 import { advanceNeural, neuralColumnX } from "../src/neural.js"
@@ -15,6 +15,41 @@ function state(width = 24, height = 18) {
 }
 
 describe("Neural diagram", () => {
+  it("matches the original contrast scan for varied colors and theme surfaces", () => {
+    const luminance = (rgb: Rgb): number => {
+      const linear = (v: number): number => v <= 10.31475 ? v / 3294.6 : ((v / 255 + 0.055) / 1.055) ** 2.4
+      return 0.2126 * linear(rgb.r) + 0.7152 * linear(rgb.g) + 0.0722 * linear(rgb.b)
+    }
+    const original = (color: Rgb, background: Rgb): Rgb => {
+      const surface = luminance(background)
+      const contrast = (candidate: Rgb): number => {
+        const value = luminance(candidate)
+        return (Math.max(value, surface) + 0.05) / (Math.min(value, surface) + 0.05)
+      }
+      if (contrast(color) >= 2.5) return color
+      const peak = Math.max(color.r, color.g, color.b)
+      const brighter = peak > 0 ? { r: color.r * 255 / peak, g: color.g * 255 / peak, b: color.b * 255 / peak } : color
+      const darkSurface = surface < 0.18
+      const anchor = darkSurface ? brighter : { r: 0, g: 0, b: 0 }
+      const target = contrast(anchor) >= 2.5 ? anchor : darkSurface ? { r: 255, g: 255, b: 255 } : anchor
+      const source = target === anchor ? color : brighter
+      for (let step = 0; step <= 100; step++) {
+        const candidate = mixRgb(source, target, step / 100)
+        if (contrast(candidate) >= 2.5) return candidate
+      }
+      return target
+    }
+    let seed = 42
+    const random = (): number => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296 }
+    for (const background of [theme.background, { r: 245, g: 245, b: 245 }, { r: 8, g: 34, b: 62 }, { r: 168, g: 60, b: 190 }]) {
+      const ink = inkFor({ background, text: theme.text })
+      for (let i = 0; i < 3000; i++) {
+        const color = i === 0 ? { r: 0, g: 0, b: 0 } : { r: random() * 255, g: random() * 255, b: random() * 255 }
+        expect(ink(color)).toEqual(original(color, background))
+      }
+    }
+  })
+
   it("fills the area with whole glyphs without labels or arrows", () => {
     const s = state()
     const frame = renderNeural(s, palette, theme)
@@ -22,6 +57,17 @@ describe("Neural diagram", () => {
     expect(frame.rows.filter((row) => /[▒▓█]/u.test(row))).toHaveLength(s.height / 2)
     expect(frame.rows.join("\n")).not.toContain("▀")
     expect(frame.text.chunks.map((chunk) => chunk.text).join("")).toBe(frame.rows.join("\n"))
+  })
+
+  it("reuses identical cells only within a frame and respects theme changes", () => {
+    const s = state()
+    const frame = renderNeural(s, palette, theme)
+    expect(frame.text.chunks[1]).toBe(frame.text.chunks[3])
+    const light = { background: { r: 245, g: 245, b: 245 }, text: { r: 20, g: 20, b: 20 } }
+    const next = renderNeural(s, palette, light)
+    expect(next.text.chunks[1]).not.toBe(frame.text.chunks[1])
+    expect(next.text.chunks[1]!.bg!.toInts().slice(0, 3)).toEqual([245, 245, 245])
+    expect(frame.text.chunks[1]!.bg!.toInts().slice(0, 3)).toEqual([28, 28, 28])
   })
 
   it("fits narrow and wide sidebars without colliding with a two-line caption", () => {

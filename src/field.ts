@@ -1,6 +1,7 @@
 /** Deterministic scalar field sampled for the half-block renderer. */
 
 import type { Mood } from "./mood.js"
+import { morphBlobSpeed } from "./motion.js"
 
 export const DEFAULT_SIZE = 20
 
@@ -66,6 +67,7 @@ export function sampleField(
   radiusScale: number = 1,
   seedOverride?: number,
   energyOverride?: number,
+  blobPhase?: number,
 ): Float32Array {
   const w = normalizeSize(width)
   const h = normalizeSize(height)
@@ -93,7 +95,7 @@ export function sampleField(
   const blobCount = 3 + energy * 2
   const wholeBlobs = Math.floor(blobCount)
   const partialBlob = blobCount - wholeBlobs
-  const speed = 0.18 + energy * 0.7
+  const blobTime = blobPhase !== undefined && Number.isFinite(blobPhase) ? blobPhase : t * morphBlobSpeed(energy)
   const noiseAmplitude = 0.1 + energy * 0.22
   const scale = Number.isFinite(radiusScale) ? clamp(radiusScale, 0.5, 1.5) : 1
 
@@ -104,8 +106,8 @@ export function sampleField(
     return {
       phase,
       weight: (0.72 + 0.28 * Math.abs(Math.sin(phase * 1.7 + 0.9))) * fade,
-      x: 0.5 + Math.sin(t * speed * (0.72 + index * 0.045) + phase) * offset,
-      y: 0.5 + Math.cos(t * speed * (0.57 + index * 0.035) + phase * 1.37) * (offset * 0.86),
+      x: 0.5 + Math.sin(blobTime * (0.72 + index * 0.045) + phase) * offset,
+      y: 0.5 + Math.cos(blobTime * (0.57 + index * 0.035) + phase * 1.37) * (offset * 0.86),
       radius: (0.26 + 0.07 * Math.sin(phase * 1.9) + energy * 0.11) * scale,
     }
   })

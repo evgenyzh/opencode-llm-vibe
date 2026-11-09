@@ -94,6 +94,27 @@ describe("renderField", () => {
     expect(square.rows[0]).toBe("▀".repeat(COLUMNS))
   })
 
+  it("reuses identical pixel chunks without changing their positions or colors", () => {
+    const background = { r: 24, g: 26, b: 28 }
+    const square = renderField(new Float32Array(COLUMNS * PIXEL_ROWS), COLUMNS, PIXEL_ROWS, EMPTY_PALETTE, undefined, background, undefined, true)
+    expect(square.text.chunks[0]).toBe(square.text.chunks[1])
+    expect(square.text.chunks[0]!.fg!.toInts().slice(0, 3)).toEqual([24, 26, 28])
+    expect(chunkText(square)).toBe(square.rows.join("\n"))
+  })
+
+  it("produces identical colored chunks with and without pixel reuse", () => {
+    const field = Float32Array.from({ length: COLUMNS * PIXEL_ROWS }, (_, i) => (i % 11) / 10)
+    const colors = Float32Array.from(field, (_, i) => i % 2 ? 0.5 : 0.95)
+    const palette = buildPalette(["#040910", "#2050ee", "#ff9900"])
+    const theme = { background: { r: 20, g: 22, b: 24 }, text: { r: 220, g: 220, b: 220 } }
+    const caption = captionFor(mood, COLUMNS, theme)
+    const uncached = renderField(field, COLUMNS, PIXEL_ROWS, palette, caption, theme.background, colors)
+    const cached = renderField(field, COLUMNS, PIXEL_ROWS, palette, caption, theme.background, colors, true)
+    const signature = (square: typeof cached) => square.text.chunks.map((chunk) => [chunk.text, chunk.fg?.toInts(), chunk.bg?.toInts(), chunk.attributes])
+    expect(cached.rows).toEqual(uncached.rows)
+    expect(signature(cached)).toEqual(signature(uncached))
+  })
+
   it("handles short fields by treating missing values as zero", () => {
     const square = renderField(new Float32Array(2), COLUMNS, PIXEL_ROWS, EMPTY_PALETTE)
     expect(square.rows).toHaveLength(ROWS)
@@ -124,6 +145,21 @@ describe("renderField", () => {
     const chunk = square.text.chunks[0]
     expect(chunk?.fg?.toInts().slice(0, 3)).toEqual([24, 26, 28])
     expect(chunk?.bg?.toInts().slice(0, 3)).toEqual([24, 26, 28])
+  })
+
+  it("renders different palette colours at equal brightness while preserving fading", () => {
+    const field = new Float32Array(COLUMNS * PIXEL_ROWS)
+    const colors = new Float32Array(COLUMNS * PIXEL_ROWS)
+    field[0] = field[1] = 0.8
+    colors[0] = 0.5
+    colors[1] = 0.95
+    const background = { r: 10, g: 10, b: 10 }
+    const square = renderField(field, COLUMNS, PIXEL_ROWS, buildPalette(["#101020", "#0055ff", "#ff7700"]), undefined, background, colors)
+    const first = square.text.chunks[0]!.fg!.toInts()
+    const second = square.text.chunks[1]!.fg!.toInts()
+    expect(first[2]).toBeGreaterThan(first[0]!)
+    expect(second[0]).toBeGreaterThan(second[2]!)
+    expect(square.text.chunks[0]!.bg!.toInts().slice(0, 3)).toEqual([10, 10, 10])
   })
 
   it("uses the theme background for the empty state palette", () => {

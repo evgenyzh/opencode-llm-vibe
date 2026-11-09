@@ -7,31 +7,39 @@ import { neuralColumnX, resizeNeural } from "./neural.js"
 
 const clamp = (value: number): number => Math.max(0, Math.min(1, value))
 
+const luminance = (rgb: Rgb): number => {
+  const linear = (v: number): number => v <= 10.31475 ? v / 3294.6 : ((v / 255 + 0.055) / 1.055) ** 2.4
+  return 0.2126 * linear(rgb.r) + 0.7152 * linear(rgb.g) + 0.0722 * linear(rgb.b)
+}
+
 /** Prefer hue-preserving brightness adjustment over blending toward grey. */
-function ink(color: Rgb, theme: CaptionColors): Rgb {
-  const luminance = (rgb: Rgb): number => {
-    const linear = (v: number): number => v <= 10.31475 ? v / 3294.6 : ((v / 255 + 0.055) / 1.055) ** 2.4
-    return 0.2126 * linear(rgb.r) + 0.7152 * linear(rgb.g) + 0.0722 * linear(rgb.b)
-  }
+export function inkFor(theme: CaptionColors): (color: Rgb) => Rgb {
   const surface = luminance(theme.background)
   const contrast = (candidate: Rgb): number => {
     const value = luminance(candidate)
     return (Math.max(value, surface) + 0.05) / (Math.min(value, surface) + 0.05)
   }
-  // Decorative graphics need less contrast than text; avoid bleaching vivid blue.
-  const minimum = 2.5
-  if (contrast(color) >= minimum) return color
-  const peak = Math.max(color.r, color.g, color.b)
-  const brighter = peak > 0 ? { r: color.r * 255 / peak, g: color.g * 255 / peak, b: color.b * 255 / peak } : color
-  const darkSurface = surface < 0.18
-  const anchor = darkSurface ? brighter : { r: 0, g: 0, b: 0 }
-  const target = contrast(anchor) >= minimum ? anchor : darkSurface ? { r: 255, g: 255, b: 255 } : anchor
-  const source = target === anchor ? color : brighter
-  for (let step = 0; step <= 100; step++) {
-    const candidate = mixRgb(source, target, step / 100)
-    if (contrast(candidate) >= minimum) return candidate
+  return (color: Rgb): Rgb => {
+    // Decorative graphics need less contrast than text; avoid bleaching vivid blue.
+    const minimum = 2.5
+    if (contrast(color) >= minimum) return color
+    const peak = Math.max(color.r, color.g, color.b)
+    const brighter = peak > 0 ? { r: color.r * 255 / peak, g: color.g * 255 / peak, b: color.b * 255 / peak } : color
+    const darkSurface = surface < 0.18
+    const anchor = darkSurface ? brighter : { r: 0, g: 0, b: 0 }
+    const target = contrast(anchor) >= minimum ? anchor : darkSurface ? { r: 255, g: 255, b: 255 } : anchor
+    const source = target === anchor ? color : brighter
+    // The path to the target has monotonic luminance. Starting below the
+    // required contrast, binary search finds the same first 1% step as the scan.
+    let low = 0, high = 100
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (contrast(mixRgb(source, target, middle / 100)) >= minimum) high = middle
+      else low = middle + 1
+    }
+    const candidate = mixRgb(source, target, low / 100)
+    return contrast(candidate) >= minimum ? candidate : target
   }
-  return target
 }
 
 export function renderNeural(
@@ -48,6 +56,7 @@ export function renderNeural(
   const background = rgbToHex(theme.background)
   const fallback = paletteColor(palette, 0.85)
   const colorCache = new Map<string, string>()
+  const ink = inkFor(theme)
   const neutral = rgbToHex(mixRgb(theme.background, theme.text, alpha * 0.8))
   const chars = Array.from({ length: h }, () => Array<string>(w).fill(" "))
   const inks = Array.from({ length: h }, () => Array<string>(w).fill(neutral))
@@ -68,7 +77,7 @@ export function renderNeural(
     const cached = colorCache.get(key)
     if (cached) return cached
     const intensity = level === 0 ? 0.42 : 0.65 + 0.35 * Math.sqrt(level / 15)
-    const result = rgbToHex(mixRgb(theme.background, ink(color, theme), alpha * intensity))
+    const result = rgbToHex(mixRgb(theme.background, ink(color), alpha * intensity))
     colorCache.set(key, result)
     return result
   }
@@ -87,8 +96,18 @@ export function renderNeural(
     rgbToHex(mixRgb(theme.background, theme.text, alpha))))
 
   const chunks: TextChunk[] = []
+  const chunkCache = new Map<string, TextChunk>()
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) chunks.push(fg(inks[y]![x]!)(bg(background)(chars[y]![x]!)))
+    for (let x = 0; x < w; x++) {
+      const color = inks[y]![x]!, char = chars[y]![x]!
+      const key = `${color}:${char}`
+      let chunk = chunkCache.get(key)
+      if (!chunk) {
+        chunk = fg(color)(bg(background)(char))
+        chunkCache.set(key, chunk)
+      }
+      chunks.push(chunk)
+    }
     if (y < h - 1) chunks.push(fg(neutral)("\n"))
   }
   return { rows: chars.map((row) => row.join("")), text: new StyledText(chunks) }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { blendFields, normalizeSize, sampleField } from "../src/field.js"
 import type { Mood } from "../src/mood.js"
+import { morphBlobSpeed } from "../src/motion.js"
 
 const calm: Mood = { colors: ["#112244", "#ff8844"], energy: 0.2 }
 const excited: Mood = { colors: ["#112244", "#ff8844"], energy: 0.95 }
@@ -80,6 +81,15 @@ describe("sampleField", () => {
     const low = sampleField(calm, 1, 20, 20, 1, 42, 0.1)
     const high = sampleField(calm, 1, 20, 20, 1, 42, 0.9)
     expect(Array.from(low)).not.toEqual(Array.from(high))
+  })
+
+  it("accepts an integrated blob phase independently of noise time", () => {
+    const time = 123.4, energy = 0.3, seed = 42
+    const original = sampleField(calm, time, 24, 18, 1, seed, energy)
+    const equivalent = sampleField(calm, time, 24, 18, 1, seed, energy, time * morphBlobSpeed(energy))
+    expect(equivalent).toEqual(original)
+    const differentPhase = sampleField(calm, time, 24, 18, 1, seed, energy, 7)
+    expect(differentPhase).not.toEqual(original)
   })
 
   it("grows the blob with the radius scale", () => {

@@ -1,6 +1,6 @@
 {
   "name": "opencode-llm-vibe",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "An animated mood indicator for the OpenCode sidebar, with five visual styles and per-session preferences.",
   "license": "MIT",
   "author": "Evgeny Zhuravlev",

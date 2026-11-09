@@ -2,8 +2,7 @@
 import { hashString, normalizeSize } from "./field.js"
 import type { Activity } from "./activity.js"
 import type { SimulationStyle } from "./styles.js"
-import type { Rgb } from "./mood.js"
-import { advanceNeural, createNeural, neuralColumnX, resizeNeural, type NeuralState } from "./neural.js"
+import { advanceNeural, createNeural, neuralColumnX, resizeNeural, type NeuralInputColors, type NeuralState } from "./neural.js"
 
 const clamp = (n: number, low = 0, high = 1): number => Math.max(low, Math.min(high, n))
 
@@ -22,12 +21,13 @@ export interface Simulation {
   nextU: Float32Array
   nextV: Float32Array
   field: Float32Array
+  colorField: Float32Array
   neighbors: Uint32Array
   particles: Particle[]
   neural: NeuralState
 }
 
-interface Particle { x: number; y: number; life: number; speed: number; strength: number }
+interface Particle { x: number; y: number; life: number; speed: number; strength: number; color: number }
 
 function random(s: Simulation): number {
   s.random = (Math.imul(s.random, 1664525) + 1013904223) >>> 0
@@ -66,15 +66,17 @@ function seedLife(s: Simulation, count: number): void {
 
 export function createSimulation(style: SimulationStyle, width: number, height: number, seed: number): Simulation {
   const w = normalizeSize(width), h = normalizeSize(height)
+  const lifeSize = style === "life" ? Math.ceil(w / 2) * Math.ceil(h / 2) : 0
+  const diffusionSize = style === "diffusion" ? w * h : 0
   const s: Simulation = {
     style, width: w, height: h, random: seed >>> 0, elapsed: 0,
-    cells: new Uint8Array(Math.ceil(w / 2) * Math.ceil(h / 2)),
-    nextCells: new Uint8Array(Math.ceil(w / 2) * Math.ceil(h / 2)),
-    trails: new Float32Array(Math.ceil(w / 2) * Math.ceil(h / 2)), history: [],
-    u: new Float32Array(w * h).fill(1), v: new Float32Array(w * h),
-    nextU: new Float32Array(w * h), nextV: new Float32Array(w * h),
-    field: new Float32Array(w * h), neighbors: new Uint32Array(style === "diffusion" ? w * h * 8 : 0), particles: [],
-    neural: createNeural(w, h / 2),
+    cells: new Uint8Array(lifeSize), nextCells: new Uint8Array(lifeSize),
+    trails: new Float32Array(lifeSize), history: [],
+    u: new Float32Array(diffusionSize).fill(1), v: new Float32Array(diffusionSize),
+    nextU: new Float32Array(diffusionSize), nextV: new Float32Array(diffusionSize),
+    field: new Float32Array(w * h), colorField: new Float32Array(style === "embers" ? w * h : 0), neighbors: new Uint32Array(style === "diffusion" ? w * h * 8 : 0), particles: [],
+    // Other engines never advance or render this minimal placeholder.
+    neural: style === "neural" ? createNeural(w, h / 2) : createNeural(4, 1),
   }
   if (style === "life") seedLife(s, 3)
   if (style === "diffusion") {
@@ -179,7 +181,7 @@ function advanceDiffusion(s: Simulation, context: number, energy: number): void 
 function advanceEmbers(s: Simulation, dt: number, context: number, energy: number): void {
   const target = Math.round(4 + clamp(context) * 12 + clamp(energy) * 8)
   while (s.particles.length < target) {
-    s.particles.push({ x: random(s) * s.width, y: random(s) * s.height, life: 0.3 + random(s) * 0.7, speed: 0.12 + random(s) * 0.35, strength: 0.55 + random(s) * 0.45 })
+    s.particles.push({ x: random(s) * s.width, y: random(s) * s.height, life: 0.3 + random(s) * 0.7, speed: 0.12 + random(s) * 0.35, strength: 0.55 + random(s) * 0.45, color: random(s) < 0.5 ? 0.5 : 0.95 })
   }
   for (const p of s.particles) {
     p.life -= dt * p.speed
@@ -187,14 +189,14 @@ function advanceEmbers(s: Simulation, dt: number, context: number, energy: numbe
     p.y -= dt * p.speed * s.height
     p.x += Math.sin(p.y * 0.4 + p.strength * 20) * dt * 0.5
     if (p.life <= 0 || p.y < 0) {
-      p.x = random(s) * s.width; p.y = s.height - 1; p.life = 1
+      p.x = random(s) * s.width; p.y = s.height - 1; p.life = 1; p.color = random(s) < 0.5 ? 0.5 : 0.95
     }
   }
   if (s.particles.length > target) s.particles.length = target
 }
 
 /** Advance in bounded fixed steps so rendering FPS and pauses cannot destabilize the simulation. */
-export function advanceSimulation(s: Simulation, elapsed: number, tempo: number, energy: number, context: number, activity: Activity | boolean = true, inputColor?: Rgb): void {
+export function advanceSimulation(s: Simulation, elapsed: number, tempo: number, energy: number, context: number, activity: Activity | boolean = true, inputColor?: NeuralInputColors): void {
   const dt = clamp(Number.isFinite(elapsed) ? elapsed : 0, 0, 0.25) * clamp(tempo, 0, 3)
   if (s.style === "embers") { advanceEmbers(s, dt, context, energy); return }
   if (s.style === "neural") {
@@ -216,8 +218,9 @@ export function advanceSimulation(s: Simulation, elapsed: number, tempo: number,
   s.elapsed = Math.min(s.elapsed, step * 2)
 }
 
-export function simulationField(s: Simulation, field: Float32Array = new Float32Array(s.width * s.height)): Float32Array {
+export function simulationField(s: Simulation, field: Float32Array = new Float32Array(s.width * s.height), colorField?: Float32Array): Float32Array {
   field.fill(0)
+  colorField?.fill(0)
   if (s.style === "life") {
     const w = gridWidth(s)
     for (let y = 0; y < gridHeight(s); y++) for (let x = 0; x < w; x++) {
@@ -236,7 +239,11 @@ export function simulationField(s: Simulation, field: Float32Array = new Float32
         if (px < 0 || px >= s.width || py < 0 || py >= s.height) continue
         const i = py * s.width + px
         const weight = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy)
-        field[i] = Math.max(field[i] ?? 0, brightness * weight)
+        const value = brightness * weight
+        if (value > (field[i] ?? 0)) {
+          field[i] = value
+          if (colorField) colorField[i] = p.color
+        }
       }
     }
   } else {

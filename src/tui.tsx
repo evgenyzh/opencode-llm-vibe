@@ -1,7 +1,7 @@
 /** TUI part: RPC subscription, sidebar rectangle, and Vibe settings. */
 
 import { Plugin } from "@opencode/plugin/tui"
-import { createSignal, Show } from "solid-js"
+import { createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { nextActivity, type Activity, type ActivityEvent } from "./activity.js"
 import {
@@ -12,12 +12,14 @@ import {
 } from "./context-usage.js"
 import { SIDEBAR_COLUMNS, SIDEBAR_PIXEL_ROWS } from "./dimensions.js"
 import type { Mood } from "./mood.js"
+import { createMoodSlot } from "./mood-slot.js"
+import { createMoodStore } from "./mood-store.js"
 import { VibeRpc } from "./rpc.js"
 import { MoodSquare } from "./square.js"
 import { defaultStyleFor, styleFor, STYLE_OPTIONS, type StyleSettings, type VisualStyle } from "./styles.js"
 
 /** Live-only TUI state. Restarting the TUI intentionally loses it. */
-const [moods, setMoods] = createStore<Record<string, Mood | null>>({})
+const moods = createMoodStore()
 const [activities, setActivities] = createStore<Record<string, Activity>>({})
 const [contextLevels, setContextLevels] = createStore<Record<string, number>>({})
 
@@ -31,7 +33,7 @@ export default Plugin.define({
     const vibe = context.client.rpc(VibeRpc)
     const unsubscribe = vibe.events.on("updated", (event) => {
       const data = event.data as { sessionID: string; mood: Mood | null }
-      setMoods(data.sessionID, data.mood)
+      moods.set(data.sessionID, data.mood)
     })
 
     const update = (sessionID: string, event: ActivityEvent): void => {
@@ -87,19 +89,17 @@ export default Plugin.define({
 
     context.ui.slot({
       prepend: "sidebar.content",
-      render: ({ sessionID }) => (
-        <Show when={visible()}>
-          <MoodSquare
-            sessionID={sessionID}
-            mood={moods[sessionID] ?? null}
-            columns={SIDEBAR_COLUMNS}
-            pixelRows={SIDEBAR_PIXEL_ROWS}
-            activity={activities[sessionID] ?? "idle"}
-            contextRatio={contextLevels[sessionID] ?? 0.5}
-            style={styleFor(styles, sessionID)}
-          />
-        </Show>
-      ),
+      render: ({ sessionID }) => createMoodSlot({
+        sessionID,
+        columns: SIDEBAR_COLUMNS,
+        pixelRows: SIDEBAR_PIXEL_ROWS,
+        visible,
+        mood: () => moods.get(sessionID),
+        activity: () => activities[sessionID] ?? "idle",
+        contextRatio: () => contextLevels[sessionID] ?? 0.5,
+        style: () => styleFor(styles, sessionID),
+        square: MoodSquare,
+      }),
     })
 
     const chooseSessionStyle = async (sessionID: string): Promise<void> => {

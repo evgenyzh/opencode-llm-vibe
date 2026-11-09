@@ -80,19 +80,25 @@ export function resizeNeural(old: NeuralState, width: number, rows: number): Neu
   return n
 }
 
-function tick(n: NeuralState, inputChance: number, random: () => number, inputColor: Rgb | undefined): void {
+export type NeuralInputColors = Rgb | readonly Rgb[]
+
+function tick(n: NeuralState, inputChance: number, random: () => number, inputColors: NeuralInputColors | undefined): void {
   n.next.fill(0)
   n.nextColors.fill(0)
   n.nextMass.fill(0)
+  const weights = new Float64Array(3)
   // Every input gets its own Bernoulli trial. There is no batch size or shared trigger.
   for (let row = 0; row < n.rows; row++) {
     if (inputChance > 0 && random() < inputChance) {
       n.next[row] = 1
       n.nextMass[row] = 1
-      const color = inputColor ?? { r: 0, g: 0, b: 0 }
-      n.nextColors[row * 3] = color.r
-      n.nextColors[row * 3 + 1] = color.g
-      n.nextColors[row * 3 + 2] = color.b
+      const color = Array.isArray(inputColors)
+        ? inputColors[Math.min(inputColors.length - 1, Math.floor(random() * inputColors.length))]
+        : inputColors as Rgb | undefined
+      const ink = color ?? { r: 0, g: 0, b: 0 }
+      n.nextColors[row * 3] = ink.r
+      n.nextColors[row * 3 + 1] = ink.g
+      n.nextColors[row * 3 + 2] = ink.b
     }
   }
   for (let col = 0; col < n.columns - 1; col++) for (let row = 0; row < n.rows; row++) {
@@ -103,8 +109,11 @@ function tick(n: NeuralState, inputChance: number, random: () => number, inputCo
     // These are conditional visual weights, not model telemetry. Choose a
     // continuation proportionally to its weight; do not multiply weights
     // over a path, which would make long paths disappear before the output.
-    const weights = Array.from({ length: count }, () => 0.25 + random() * 0.75)
-    const total = weights.reduce((sum, value) => sum + value, 0)
+    let total = 0
+    for (let i = 0; i < count; i++) {
+      weights[i] = 0.25 + random() * 0.75
+      total += weights[i]!
+    }
     let pick = random() * total, chosen = 0
     while (chosen < count - 1 && pick >= weights[chosen]!) pick -= weights[chosen++]!
     const first = low + chosen
@@ -142,8 +151,9 @@ function tick(n: NeuralState, inputChance: number, random: () => number, inputCo
 /** Idle stops input injection; existing branches still propagate to the output. */
 export function advanceNeural(
   n: NeuralState, dt: number, energy: number, context: number, active: boolean, random: () => number,
-  inputColor?: Rgb,
+  inputColors?: NeuralInputColors,
 ): void {
+  const inputColor = Array.isArray(inputColors) ? inputColors[0] : inputColors as Rgb | undefined
   if (inputColor && !n.colorInitialized) {
     for (let i = 0; i < n.nodes.length; i++) {
       n.colors.set([inputColor.r, inputColor.g, inputColor.b], i * 3)
@@ -168,7 +178,7 @@ export function advanceNeural(
     n.clock += step
     if (n.clock >= NEURAL_TICK - 1e-9) {
       n.clock = 0
-      tick(n, chance, random, inputColor)
+      tick(n, chance, random, inputColors)
     }
   }
 }

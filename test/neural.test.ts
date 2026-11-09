@@ -7,6 +7,19 @@ describe("branching neural impulses", () => {
   const blue = { r: 20, g: 30, b: 240 }
   const rgb = (buffer: Float32Array, index: number): number[] => Array.from(buffer.slice(index * 3, index * 3 + 3))
 
+  it("injects different palette colours independently and carries them into the model", () => {
+    const n = createNeural(16, 2)
+    // Each firing input draws its own colour after its independent firing trial.
+    const rolls = [0, 0.1, 0, 0.9]
+    advanceNeural(n, NEURAL_TICK, 0.5, 0.5, true, () => rolls.shift() ?? 0.5, [red, blue])
+    expect(rgb(n.frontColors, 0)).toEqual([240, 20, 30])
+    expect(rgb(n.frontColors, 1)).toEqual([20, 30, 240])
+    const paths = [0.5, 0.5, 0.1, 0.9, 0.5, 0.5, 0.9, 0.9]
+    advanceNeural(n, NEURAL_TICK, 0, 0, false, () => paths.shift() ?? 0.5, [blue])
+    expect(rgb(n.frontColors, n.rows)).toEqual([240, 20, 30])
+    expect(rgb(n.frontColors, n.rows + 1)).toEqual([20, 30, 240])
+  })
+
   it("carries the input mood along impulses instead of recoloring distant layers", () => {
     const n = createNeural(16, 3)
     advanceNeural(n, 0, 0, 0, false, () => 0.5, blue)

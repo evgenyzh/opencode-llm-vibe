@@ -5,6 +5,27 @@ export interface MotionState {
   readonly tempo: number
 }
 
+/** Separate Morph clocks: noise time and the energy-integrated blob phase. */
+export interface MorphMotionState {
+  readonly time: number
+  readonly blobPhase: number
+}
+
+export const MORPH_SPEED_MULTIPLIER = 1.5
+
+export function morphBlobSpeed(energy: number): number {
+  const value = clamp(Number.isFinite(energy) ? energy : 0.5, 0, 1)
+  // 0.5 matches the previous speed at 0.95; the upper range rises gently.
+  return 0.18 + 0.7 * (2.4 * value - value * value)
+}
+
+/** Integrate only the new phase increment, never rescale accumulated time. */
+export function advanceMorphMotion(state: MorphMotionState, phaseDelta: number, energy: number): MorphMotionState {
+  if (!Number.isFinite(phaseDelta) || phaseDelta <= 0) return state
+  const delta = phaseDelta * MORPH_SPEED_MULTIPLIER
+  return { time: state.time + delta, blobPhase: state.blobPhase + delta * morphBlobSpeed(energy) }
+}
+
 /** Time constant for easing the tempo toward the activity target. */
 export const TEMPO_TAU = 0.3
 

@@ -76,10 +76,11 @@ export function visualAt(
   background?: Rgb,
   radiusScale: number = 1,
   seed?: number,
+  blobPhase?: number,
 ): Visual {
   if (!transition) {
     return {
-      field: sampleField(mood, phase, columns, pixelRows, radiusScale, seed),
+      field: sampleField(mood, phase, columns, pixelRows, radiusScale, seed, undefined, blobPhase),
       palette: paletteFor(mood, background),
       mood,
     }
@@ -88,7 +89,7 @@ export function visualAt(
   const raw = clamp((at - transition.start) / MORPH_MS, 0, 1)
   if (raw >= 1) {
     return {
-      field: sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed),
+      field: sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed, undefined, blobPhase),
       palette: paletteFor(transition.to, background),
       mood: transition.to,
     }
@@ -110,7 +111,7 @@ export function visualAt(
     transition.to !== null
   ) {
     return {
-      field: sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed, energy),
+      field: sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed, energy, blobPhase),
       palette,
       mood: visibleMood,
     }
@@ -118,8 +119,8 @@ export function visualAt(
 
   const source =
     transition.fromField ??
-    sampleField(transition.fromMood, phase, columns, pixelRows, radiusScale, seed, fromEnergy)
-  const target = sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed, toEnergy)
+    sampleField(transition.fromMood, phase, columns, pixelRows, radiusScale, seed, fromEnergy, blobPhase)
+  const target = sampleField(transition.to, phase, columns, pixelRows, radiusScale, seed, toEnergy, blobPhase)
   return {
     field: blendFields(source, target, progress),
     palette,

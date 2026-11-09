@@ -137,8 +137,9 @@ function fadeToBackground(value: number): number {
   return t * t * (3 - 2 * t)
 }
 
-function pixelColor(palette: Palette, value: number, background?: Rgb): Rgb {
-  const color = paletteColor(palette, value)
+function pixelColor(palette: Palette, value: number, background?: Rgb, colorValue = value): Rgb {
+  if (background && value <= 0.04) return background
+  const color = paletteColor(palette, colorValue)
   return background ? mixRgb(background, color, fadeToBackground(value)) : color
 }
 
@@ -150,6 +151,8 @@ export function renderField(
   palette: Palette,
   caption?: Caption,
   background?: Rgb,
+  colorField?: Float32Array,
+  reusePixels = false,
 ): RenderedSquare {
   const w = normalizeSize(columns)
   const h = normalizeSize(pixelRows)
@@ -158,6 +161,19 @@ export function renderField(
   const captionRows = lines.length
   const pixelCellRows = rowCount - captionRows
   const chunks: TextChunk[] = []
+  // Reuse identical immutable pixels within a frame (especially empty space).
+  const pixels = reusePixels ? new Map<string, TextChunk>() : undefined
+  const pixel = (top: Rgb, bottom: Rgb): TextChunk => {
+    const foreground = rgbToHex(top), background = rgbToHex(bottom)
+    if (!pixels) return fg(foreground)(bg(background)("▀"))
+    const key = `${foreground}${background}`
+    let chunk = pixels.get(key)
+    if (!chunk) {
+      chunk = fg(foreground)(bg(background)("▀"))
+      pixels.set(key, chunk)
+    }
+    return chunk
+  }
   const rows: string[] = []
 
   const appendChunk = (chunk: TextChunk): void => {
@@ -172,9 +188,9 @@ export function renderField(
     const topOffset = row * 2 * w
     const bottomOffset = (row * 2 + 1) * w
     for (let column = 0; column < w; column += 1) {
-      const top = pixelColor(palette, field[topOffset + column] ?? 0, background)
-      const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background)
-      appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
+      const top = pixelColor(palette, field[topOffset + column] ?? 0, background, colorField?.[topOffset + column])
+      const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background, colorField?.[bottomOffset + column])
+      appendChunk(pixel(top, bottom))
     }
     rows.push("▀".repeat(w))
     if (row < rowCount - 1) appendNewline()
@@ -193,9 +209,9 @@ export function renderField(
 
       for (let column = 0; column < w; column += 1) {
         if (column < bandStart || column >= bandEnd) {
-          const top = pixelColor(palette, field[topOffset + column] ?? 0, background)
-          const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background)
-          appendChunk(fg(rgbToHex(top))(bg(rgbToHex(bottom))("▀")))
+          const top = pixelColor(palette, field[topOffset + column] ?? 0, background, colorField?.[topOffset + column])
+          const bottom = pixelColor(palette, field[bottomOffset + column] ?? 0, background, colorField?.[bottomOffset + column])
+          appendChunk(pixel(top, bottom))
           plain.push("▀")
           continue
         }

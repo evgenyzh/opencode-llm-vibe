@@ -85,6 +85,17 @@ describe("visualAt", () => {
     expect(middle.field).toEqual(expected)
   })
 
+  it("preserves an integrated blob phase across an energy transition", () => {
+    const seed = 42, time = 10000, blobPhase = 1234
+    const transition = transitionTo(alert)
+    const start = visualAt(alert, transition, time, COLUMNS, PIXEL_ROWS, 0, undefined, 1, seed, blobPhase)
+    expect(start.field).toEqual(sampleField(calm, time, COLUMNS, PIXEL_ROWS, 1, seed, calm.energy, blobPhase))
+    const middle = visualAt(alert, transition, time, COLUMNS, PIXEL_ROWS, MORPH_MS / 2, undefined, 1, seed, blobPhase)
+    expect(middle.field).toEqual(sampleField(alert, time, COLUMNS, PIXEL_ROWS, 1, seed, 0.6, blobPhase))
+    const end = visualAt(alert, transition, time, COLUMNS, PIXEL_ROWS, MORPH_MS, undefined, 1, seed, blobPhase)
+    expect(end.field).toEqual(sampleField(alert, time, COLUMNS, PIXEL_ROWS, 1, seed, alert.energy, blobPhase))
+  })
+
   it("starts and ends on the same field when the seed is pinned", () => {
     const seed = 7
     const transition = transitionTo(alert)
